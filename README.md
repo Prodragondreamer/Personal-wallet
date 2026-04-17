@@ -35,3 +35,6 @@ Do not use these in production builds; prefer OS secure storage and user-only un
 ## Interface for UI
 
 `walletapp/services/backend.py` defines `BackendController` and `StubBackend` (still available for tests). The app wires `SecureWalletBackend` by default in `walletapp/app.py`.
+
+##Exmaple frontend
+--still working on it
