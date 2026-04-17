@@ -1,0 +1,673 @@
+#:kivy 2.3.0
+#:import dp kivy.metrics.dp
+
+# Theme colors (easy to tweak)
+# - background: deep navy
+# - surface: card/input
+# - accent: primary button
+<AppRoot@BoxLayout>:
+    canvas.before:
+        # faux "gradient" background by stacking translucent layers
+        Color:
+            rgba: (0.05, 0.06, 0.09, 1)
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: (0.10, 0.14, 0.26, 0.30)
+        RoundedRectangle:
+            pos: self.x - dp(60), self.top - dp(260)
+            size: self.width + dp(120), dp(300)
+            radius: [dp(220), dp(220), dp(220), dp(220)]
+
+<RoundedCard@BoxLayout>:
+    padding: dp(14), dp(12)
+    spacing: dp(10)
+    size_hint_y: None
+    height: self.minimum_height
+    canvas.before:
+        # soft shadow
+        Color:
+            rgba: (0, 0, 0, 0.35)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(4)
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        # surface base
+        Color:
+            rgba: (0.12, 0.13, 0.16, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        # subtle highlight layer (faux gradient)
+        Color:
+            rgba: (1, 1, 1, 0.04)
+        RoundedRectangle:
+            pos: self.x, self.y + self.height * 0.55
+            size: self.width, self.height * 0.45
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+
+<RoundedButton@Button>:
+    background_normal: ""
+    background_down: ""
+    background_color: (0, 0, 0, 0)
+    color: (1, 1, 1, 1)
+    font_size: "14sp"
+    size_hint_y: None
+    height: "44dp"
+    canvas.before:
+        # shadow
+        Color:
+            rgba: (0, 0, 0, 0.35)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(3)
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (0.22, 0.45, 0.95, 1) if self.state == "normal" else (0.18, 0.38, 0.85, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (1, 1, 1, 0.07) if self.state == "normal" else (1, 1, 1, 0.04)
+        RoundedRectangle:
+            pos: self.x, self.y + self.height * 0.55
+            size: self.width, self.height * 0.45
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+
+<RoundedButtonSecondary@RoundedButton>:
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.32)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(3)
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (0.20, 0.22, 0.28, 1) if self.state == "normal" else (0.17, 0.18, 0.23, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (1, 1, 1, 0.05) if self.state == "normal" else (1, 1, 1, 0.03)
+        RoundedRectangle:
+            pos: self.x, self.y + self.height * 0.55
+            size: self.width, self.height * 0.45
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+
+<IconChipButton@Button>:
+    # A small rounded icon button using unicode glyphs (no assets needed).
+    background_normal: ""
+    background_down: ""
+    background_color: (0, 0, 0, 0)
+    color: (1, 1, 1, 1)
+    font_name: "MaterialIcons"
+    font_size: "22sp"
+    bold: True
+    size_hint: None, None
+    size: "40dp", "40dp"
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.35)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(2)
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        Color:
+            rgba: (0.16, 0.17, 0.21, 1) if self.state == "normal" else (0.13, 0.14, 0.18, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+
+<RoundedField@BoxLayout>:
+    padding: dp(10), 0
+    spacing: dp(8)
+    size_hint_y: None
+    height: "44dp"
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.28)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(2)
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        Color:
+            rgba: (0.16, 0.17, 0.21, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        Color:
+            rgba: (1, 1, 1, 0.03)
+        RoundedRectangle:
+            pos: self.x, self.y + self.height * 0.60
+            size: self.width, self.height * 0.40
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+
+<RoundedTextInput@TextInput>:
+    background_normal: ""
+    background_active: ""
+    background_color: (0, 0, 0, 0)
+    foreground_color: (1, 1, 1, 1)
+    cursor_color: (0.9, 0.9, 1, 1)
+    padding: dp(4), dp(10), dp(4), dp(10)
+    multiline: False
+    write_tab: False
+
+<WalletNavBar@BoxLayout>:
+    # floating "pill" nav bar
+    size_hint_y: None
+    height: "70dp"
+    padding: dp(16), dp(10)
+    spacing: dp(10)
+    canvas.before:
+        # shadow
+        Color:
+            rgba: (0, 0, 0, 0.45)
+        RoundedRectangle:
+            pos: self.x + dp(6), self.y - dp(6)
+            size: self.width - dp(12), self.height
+            radius: [dp(26), dp(26), dp(26), dp(26)]
+        # pill surface
+        Color:
+            rgba: (0.12, 0.13, 0.16, 0.92)
+        RoundedRectangle:
+            pos: self.x + dp(6), self.y
+            size: self.width - dp(12), self.height
+            radius: [dp(26), dp(26), dp(26), dp(26)]
+
+    RoundedButtonSecondary:
+        text: "Home"
+        height: "44dp"
+        on_release: app.root.set_current("main")
+    RoundedButtonSecondary:
+        text: "Asset"
+        height: "44dp"
+        on_release: app.root.set_current("asset_entry")
+    RoundedButtonSecondary:
+        text: "Preview"
+        height: "44dp"
+        on_release: app.root.set_current("tx_preview")
+    RoundedButtonSecondary:
+        text: "Settings"
+        height: "44dp"
+        on_release: app.root.set_current("settings")
+
+
+<MainScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5d2"  # menu
+            Widget:
+            IconChipButton:
+                text: u"\ue88a"  # home
+                on_release: app.root.set_current("main")
+
+        ScrollView:
+            # This expands and prevents "everything at bottom" packing.
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: "12dp"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "6dp"
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Portfolio total"
+                        color: (0.8, 0.8, 0.85, 1)
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(6)
+                        text: root.portfolio_total
+                        font_size: "28sp"
+                        bold: True
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(4) if root.vault_status else 0
+                        opacity: 1 if root.vault_status else 0
+                        text: root.vault_status
+                        color: (1.0, 0.72, 0.55, 1)
+                        font_size: "12sp"
+                        text_size: self.width, None
+
+                BoxLayout:
+                    size_hint_y: None
+                    height: "44dp"
+                    spacing: "10dp"
+                    RoundedButton:
+                        text: "New Transaction"
+                        on_release: app.root.set_current("asset_entry")
+                    RoundedButtonSecondary:
+                        text: "Refresh"
+                        on_release: root.on_pre_enter()
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "8dp"
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(4)
+                        text: "Assets"
+                        bold: True
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "170dp"
+                        spacing: "12dp"
+                        PieChart:
+                            id: assets_pie
+                            size_hint_x: 0.55
+                        Label:
+                            id: assets_legend
+                            size_hint_x: 0.45
+                            text: ""
+                            color: (0.85, 0.86, 0.90, 1)
+                            halign: "left"
+                            valign: "top"
+                            text_size: self.size
+                    RecycleView:
+                        id: assets_rv
+                        viewclass: "Label"
+                        scroll_type: ["bars", "content"]
+                        bar_width: "6dp"
+                        RecycleBoxLayout:
+                            default_size: None, dp(36)
+                            default_size_hint: 1, None
+                            size_hint_y: None
+                            height: self.minimum_height
+                            orientation: "vertical"
+
+        WalletNavBar:
+
+
+<AssetEntryScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5c4"  # arrow_back
+                on_release: app.root.set_current("main")
+            Label:
+                text: "New transaction"
+                bold: True
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            IconChipButton:
+                text: u"\ue897"  # lock
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            scroll_timeout: 250
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: "10dp"
+
+                Label:
+                    size_hint_y: None
+                    height: "34dp"
+                    text: "Asset Entry"
+                    font_size: "22sp"
+                    bold: True
+                    text_size: self.width, None
+                    halign: "left"
+                    valign: "middle"
+
+                BoxLayout:
+                    orientation: "vertical"
+                    size_hint_y: None
+                    height: self.minimum_height
+                    spacing: "10dp"
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Asset kind"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            Spinner:
+                                id: asset_kind
+                                text: "Crypto"
+                                values: ["Crypto", "Stock", "Cash"]
+                                background_normal: ""
+                                background_down: ""
+                                background_color: (0, 0, 0, 0)
+                                on_text: root.clear_error()
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Symbol"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            RoundedTextInput:
+                                id: asset_symbol
+                                hint_text: "ETH"
+                                on_text: root.clear_error()
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Amount"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            RoundedTextInput:
+                                id: asset_amount
+                                hint_text: "0.00"
+                                input_filter: "float"
+                                on_text: root.clear_error()
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "To address"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            RoundedTextInput:
+                                id: to_address
+                                hint_text: "0x…"
+                                on_text: root.clear_error()
+
+                Label:
+                    size_hint_y: None
+                    height: "26dp"
+                    text: "Memo (optional)"
+                    halign: "left"
+                    valign: "middle"
+                    text_size: self.size
+
+                RoundedField:
+                    size_hint_y: None
+                    height: "108dp"
+                    padding: dp(10), dp(8)
+                    RoundedTextInput:
+                        id: memo
+                        hint_text: "For rent / test transfer / etc."
+                        multiline: True
+                        padding: dp(4), dp(8), dp(4), dp(8)
+                        on_text: root.clear_error()
+
+                Label:
+                    size_hint_y: None
+                    height: "26dp"
+                    text: root.error_text
+                    color: (0.95, 0.35, 0.35, 1)
+                    text_size: self.width, None
+                    halign: "left"
+                    valign: "middle"
+
+                BoxLayout:
+                    size_hint_y: None
+                    height: "44dp"
+                    spacing: "10dp"
+                    RoundedButton:
+                        text: "Build Preview"
+                        on_release: root.go_to_preview()
+                    RoundedButtonSecondary:
+                        text: "Clear"
+                        on_release:
+                            asset_symbol.text = ""
+                            asset_amount.text = ""
+                            to_address.text = ""
+                            memo.text = ""
+                            root.clear_error()
+
+        WalletNavBar:
+
+
+<TransactionPreviewScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5c4"  # arrow_back
+                on_release: app.root.set_current("asset_entry")
+            Label:
+                text: "Preview"
+                bold: True
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            IconChipButton:
+                text: u"\ue897"  # lock
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+            text: "Transaction Preview"
+            font_size: "22sp"
+            bold: True
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            Label:
+                text: root.summary_text
+                size_hint_y: None
+                text_size: (self.width - dp(10)), None
+                height: self.texture_size[1] + dp(10)
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(8)
+            text: root.status_text
+            color: (0.60, 0.90, 0.60, 1) if root.status_text.startswith("Sent") else (0.95, 0.35, 0.35, 1)
+
+        BoxLayout:
+            size_hint_y: None
+            height: "44dp"
+            spacing: "10dp"
+            RoundedButtonSecondary:
+                text: "Back"
+                on_release: app.root.set_current("asset_entry")
+            RoundedButton:
+                text: "Confirm Send"
+                on_release: root.confirm_send()
+
+        WalletNavBar:
+
+
+<SettingsSecurityScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5c4"  # arrow_back
+                on_release: app.root.set_current("main")
+            Label:
+                text: "Settings"
+                bold: True
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            IconChipButton:
+                text: u"\ue897"  # lock
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+            text: "Settings / Security"
+            font_size: "22sp"
+            bold: True
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+            text: root.vault_hint
+            color: (0.75, 0.78, 0.85, 1)
+            font_size: "13sp"
+            text_size: self.width, None
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: "10dp"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "10dp"
+                    padding: dp(18), dp(14)
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Encrypted vault (local DB)"
+                        bold: True
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(6)
+                        text: "Balances and keys are encrypted at rest. Passphrase only in memory while unlocked."
+                        color: (0.78, 0.80, 0.86, 1)
+                        font_size: "12sp"
+                        text_size: self.width, None
+                    RoundedTextInput:
+                        id: passphrase_input
+                        size_hint_y: None
+                        height: "44dp"
+                        hint_text: "Vault passphrase"
+                        password: True
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "8dp"
+                        RoundedButtonSecondary:
+                            text: "Create vault"
+                            on_release: root.create_vault()
+                        RoundedButtonSecondary:
+                            text: "Unlock"
+                            on_release: root.unlock_vault()
+                        RoundedButtonSecondary:
+                            text: "Lock"
+                            on_release: root.lock_vault()
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "10dp"
+                    padding: dp(18), dp(14)
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Kill switch"
+                            size_hint_x: 0.70
+                            text_size: self.size
+                            halign: "left"
+                            valign: "middle"
+                            shorten: True
+                            shorten_from: "right"
+                        Switch:
+                            active: root.killswitch_enabled
+                            on_active: root.toggle_killswitch(self.active)
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Require PIN (placeholder)"
+                            size_hint_x: 0.70
+                            text_size: self.size
+                            halign: "left"
+                            valign: "middle"
+                            shorten: True
+                            shorten_from: "right"
+                        Switch:
+                            active: False
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Biometrics (placeholder)"
+                            size_hint_x: 0.70
+                            text_size: self.size
+                            halign: "left"
+                            valign: "middle"
+                            shorten: True
+                            shorten_from: "right"
+                        Switch:
+                            active: False
+
+        BoxLayout:
+            size_hint_y: None
+            height: "44dp"
+            spacing: "10dp"
+            RoundedButton:
+                text: "Save"
+                on_release: root.save_settings()
+            RoundedButtonSecondary:
+                text: "Reset status"
+                on_release: root.status_text = ""
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(8)
+            text: root.status_text
+            color: (0.8, 0.8, 0.85, 1)
+
+        WalletNavBar:
+
