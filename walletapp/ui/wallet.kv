@@ -193,7 +193,7 @@
         height: "44dp"
         on_release: app.root.set_current("tx_preview")
     RoundedButtonSecondary:
-        text: "Settings"
+        text: "Vault"
         height: "44dp"
         on_release: app.root.set_current("settings")
 
@@ -226,6 +226,37 @@
                 size_hint_y: None
                 height: self.minimum_height
                 spacing: "12dp"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "8dp"
+                    padding: dp(14), dp(14)
+                    Widget:
+                        size_hint_y: None
+                        height: dp(4)
+                        canvas.before:
+                            Color:
+                                rgba: root.vault_strip_color
+                            Rectangle:
+                                pos: self.pos
+                                size: self.size
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Dashboard"
+                        bold: True
+                        color: (0.92, 0.93, 0.96, 1)
+                    Label:
+                        id: status_label
+                        markup: True
+                        text: root.system_status
+                        color: (0.86, 0.88, 0.92, 1)
+                        font_size: "13sp"
+                        halign: "left"
+                        valign: "top"
+                        text_size: self.width, None
+                        size_hint_y: None
+                        height: self.texture_size[1] + dp(6)
 
                 RoundedCard:
                     orientation: "vertical"
@@ -342,6 +373,15 @@
                     text_size: self.width, None
                     halign: "left"
                     valign: "middle"
+
+                Label:
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(4)
+                    text: "Fill the form, then Preview. Unlock the vault on Home (Dashboard) first."
+                    font_size: "12sp"
+                    color: (0.72, 0.74, 0.80, 1)
+                    text_size: self.width, None
+                    halign: "left"
 
                 BoxLayout:
                     orientation: "vertical"
@@ -487,6 +527,15 @@
             font_size: "22sp"
             bold: True
 
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(4)
+            text: "Testnet demo only — values are not real money."
+            font_size: "12sp"
+            color: (0.72, 0.74, 0.80, 1)
+            text_size: self.width, None
+            halign: "left"
+
         ScrollView:
             size_hint_y: 1
             do_scroll_x: False
@@ -532,7 +581,7 @@
                 text: u"\ue5c4"  # arrow_back
                 on_release: app.root.set_current("main")
             Label:
-                text: "Settings"
+                text: "Vault"
                 bold: True
                 halign: "left"
                 valign: "middle"
@@ -543,7 +592,7 @@
         Label:
             size_hint_y: None
             height: self.texture_size[1] + dp(6)
-            text: "Settings / Security"
+            text: "Vault & security"
             font_size: "22sp"
             bold: True
 

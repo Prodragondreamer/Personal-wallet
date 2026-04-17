@@ -21,7 +21,7 @@ The app uses `SecureWalletBackend` (`walletapp/services/secure_backend.py`) with
 
 ### First-time setup (UI)
 
-1. Open **Settings**.
+1. Open **Vault** (bottom navigation).
 2. Enter a passphrase (8+ characters) and tap **Create vault** (once per device DB).
 3. Tap **Unlock** after restarts.
 
