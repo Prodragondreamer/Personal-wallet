@@ -1,26 +1,20 @@
+# Updated main.py logic for local and cloud interaction
 from web3 import Web3
 import yfinance as yf
 
 class SafeguardVault:
-    def __init__(self, provider_url, contract_address):
-        # Establish connection to the Sepolia cloud
+    def __init__(self, provider_url="https://sepolia.infura.io/v3/YOUR_ID"):
+        # Connect to Ethereum Sepolia via Cloud Provider
         self.w3 = Web3(Web3.HTTPProvider(provider_url))
-        self.address = contract_address
+        self.is_connected = self.w3.is_connected()
 
-    def get_market_price(self, ticker):
-        """FR-01: Real-time Price Fetching"""
-        try:
-            asset = yf.Ticker(ticker)
-            return asset.history(period="1d")['Close'].iloc[-1]
-        except Exception:
-            return 0.0
-
-    def check_system_status(self):
-        """FR-03: Kill Switch Status"""
-        # Checks if the contract is currently paused
-        return "Operational" if not self.w3.eth.get_code(self.address) == b'' else "Contract Not Found"
+    def get_unified_balance(self, manual_bank, crypto_ticker):
+        """Calculates total net worth from local and cloud data."""
+        # Fetching real-time cloud data
+        crypto_price = yf.Ticker(crypto_ticker).history(period="1d")['Close'].iloc[-1]
+        # logic for unified view
+        return float(manual_bank) + float(crypto_price)
 
 if __name__ == "__main__":
-    # Example initialization for the prototype
-    vault = SafeguardVault("https://sepolia.infura.io/v3/YOUR_PROJECT_ID", "0xYourContractAddress")
-    print(f"Vault Status: {vault.check_system_status()}")
+    app = SafeguardVault()
+    print(f"Cloud Connection Successful: {app.is_connected}")
