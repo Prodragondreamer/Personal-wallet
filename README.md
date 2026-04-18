@@ -13,3 +13,5 @@
 ## Technical Highlights
 - [cite_start]**Transaction Foresight:** Simulates gas fees and balance impact before execution[cite: 12, 20].
 - [cite_start]**Emergency Kill Switch:** Allows users to freeze their contract for 24-48 hours during a breach[cite: 19, 136].
+
+![Build Status](https://github.com/Prodragondreamer/Personal-wallet/workflows/Python%20CI/CD%20Pipeline/badge.svg)
