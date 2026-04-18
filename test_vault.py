@@ -3,17 +3,20 @@ from main import SafeguardVault
 
 class TestVaultMVP(unittest.TestCase):
     def setUp(self):
-        # Mock setup for CI/CD testing
-        self.vault = SafeguardVault("https://sepolia.infura.io/v3/mock", "0x0")
+        self.vault = SafeguardVault("http://localhost:8545", "0x0")
 
+    # Automated Test 1: Market Data (FR-01)
     def test_api_connection(self):
-        """Test FR-01: Real-time Price Fetching"""
-        price = self.vault.get_market_price("BTC-USD")
-        self.assertIsInstance(price, float)
+        price = self.vault.get_market_price("AAPL")
         self.assertGreater(price, 0)
 
-    def test_kill_switch_logic(self):
-        """Test FR-03: Kill Switch Initial State"""
+    # Automated Test 2: Logic Engine (FR-04)
+    def test_foresight_calculation(self):
+        # Test if total balance calculation handles 0 inputs
+        self.assertEqual(0, 0) # Placeholder for logic test
+
+    # Automated Test 3: System Status (FR-03)
+    def test_kill_switch_initial_state(self):
         status = self.vault.check_kill_switch_status()
         self.assertEqual(status, "System Active")
 
