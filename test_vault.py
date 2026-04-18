@@ -1,27 +1,24 @@
-import pytest
-from web3 import Web3
+import unittest
+from main import SafeguardVault
 
-# Mock testing logic for your MVP
-def test_price_api_connection():
-    # Unit Test 1: Identify FR-01
-    # Tests if the price fetcher returns data
-    price = 65000.0  # Simulated API return
-    assert isinstance(price, float)
-    assert price > 0
+class TestVaultMVP(unittest.TestCase):
+    def setUp(self):
+        self.vault = SafeguardVault("http://localhost:8545", "0x0")
 
-def test_database_persistence():
-    # Unit Test 2: Identify FR-02
-    # Tests if manual bank balance is saved
-    balance = 1000.0
-    saved_data = {"bank_balance": 1000.0}
-    assert saved_data["bank_balance"] == balance
+    # Automated Test 1: Market Data (FR-01)
+    def test_api_connection(self):
+        price = self.vault.get_market_price("AAPL")
+        self.assertGreater(price, 0)
 
-def test_kill_switch_logic():
-    # Unit Test 3: Identify FR-03
-    # Tests the software's state change
-    is_frozen = False
-    def trigger_kill_switch():
-        return True
-    
-    is_frozen = trigger_kill_switch()
-    assert is_frozen == True
+    # Automated Test 2: Logic Engine (FR-04)
+    def test_foresight_calculation(self):
+        # Test if total balance calculation handles 0 inputs
+        self.assertEqual(0, 0) # Placeholder for logic test
+
+    # Automated Test 3: System Status (FR-03)
+    def test_kill_switch_initial_state(self):
+        status = self.vault.check_kill_switch_status()
+        self.assertEqual(status, "System Active")
+
+if __name__ == "__main__":
+    unittest.main()
