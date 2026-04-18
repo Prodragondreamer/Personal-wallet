@@ -1,20 +1,18 @@
 import unittest
 from main import SafeguardVault
 
-class TestSafeguardVault(unittest.TestCase):
+class TestVaultAutomation(unittest.TestCase):
     def setUp(self):
-        # Use a mock or local provider for testing
-        self.vault = SafeguardVault("https://rpc.ankr.com/eth_sepolia", "0x0000000000000000000000000000000000000000")
+        # Using a dummy address for CI testing
+        self.vault = SafeguardVault("https://sepolia.infura.io/v3/mock", "0x000")
 
-    def test_market_api(self):
-        """Test Case for FR-01: Real-time Price Fetching"""
-        price = self.vault.get_market_price("ETH-USD")
-        self.assertGreater(price, 0, "Price fetching failed")
+    def test_api_integration(self):
+        """Test Case FR-01: Real-time Price Fetching"""
+        price = self.vault.get_market_price("BTC-USD")
+        self.assertIsInstance(price, float)
+        self.assertGreater(price, 0)
 
-    def test_system_initialization(self):
-        """Test Case for FR-03: Kill Switch Connectivity"""
-        status = self.vault.check_system_status()
-        self.assertIn(status, ["Operational", "Contract Not Found"])
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_kill_switch_logic(self):
+        """Test Case FR-03: Kill Switch Initial State"""
+        status = self.vault.check_kill_switch_status()
+        self.assertEqual(status, "System Active")
