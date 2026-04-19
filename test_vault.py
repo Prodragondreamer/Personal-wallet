@@ -8,12 +8,12 @@ class TestSafeguardVault(unittest.TestCase):
         price_received = 50000.00 
         self.assertTrue(isinstance(price_received, float))
 
-    def update_manual_balance(self, amount):
-        """Requirement FR-02: User manually inputs bank balance."""
-        self.cursor.execute('DELETE FROM balance') # Keep only current balance
-        self.cursor.execute('INSERT INTO balance VALUES (?)', (amount,))
-        self.conn.commit()
-        return True
+    def test_fr02_manual_entry(self):
+        """Testing Requirement FR-02: Local Data Persistence"""
+        test_amount = 1250.50
+        self.vault.update_manual_balance(test_amount)
+        retrieved_amount = self.vault.get_manual_balance()
+        self.assertEqual(test_amount, retrieved_amount, "Database should store manual entry.")
 
     def test_fr03_kill_switch_logic(self):
         """Testing Requirement FR-03: Security Kill Switch"""
