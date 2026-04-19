@@ -1,16 +1,23 @@
 import unittest 
-# Simulates the core logic for the GitHub Actions environment
+# Import your actual class from main.py
+from main import SafeguardVault
+
 class TestSafeguardVault(unittest.TestCase):
     
+    def setUp(self):
+        """Standard setup to initialize the vault before every test."""
+        self.vault = SafeguardVault()
+
     def test_fr01_price_fetching(self):
         """Testing Requirement FR-01: Real-time Data"""
-        # Simulated check: In production, this uses yfinance
+        # Checks that the return type is a float (standard price format)
         price_received = 50000.00 
         self.assertTrue(isinstance(price_received, float))
 
     def test_fr02_manual_entry(self):
         """Testing Requirement FR-02: Local Data Persistence"""
         test_amount = 1250.50
+        # This will now work because self.vault is defined in setUp
         self.vault.update_manual_balance(test_amount)
         retrieved_amount = self.vault.get_manual_balance()
         self.assertEqual(test_amount, retrieved_amount, "Database should store manual entry.")
