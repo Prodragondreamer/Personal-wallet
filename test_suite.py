@@ -33,7 +33,7 @@ class SafeguardVault:
 
 # ══════════════════════════════════════════════════════════
 class TestFR01_PriceFetching(unittest.TestCase):
-    """FR-01 — Real-time price data returns a valid positive float."""
+    """FR-01: Real-time price data returns a valid positive float."""
 
     def test_price_is_float(self):
         price = 50000.00                        # mocked API response
@@ -44,7 +44,7 @@ class TestFR01_PriceFetching(unittest.TestCase):
         self.assertGreater(price, 0)
 
     def test_api_failure_returns_fallback(self):
-        """App must not crash when API is down — return None or cached value."""
+        """App must not crash when API is down. return None or cached value."""
         def fetch_price():
             try:
                 raise ConnectionError("API unreachable")
@@ -54,7 +54,7 @@ class TestFR01_PriceFetching(unittest.TestCase):
 
 
 class TestFR02_ManualBankEntry(unittest.TestCase):
-    """FR-02 — User can input a bank balance; it saves and retrieves correctly."""
+    """FR-02: User can input a bank balance; it saves and retrieves correctly."""
 
     def setUp(self):
         self.vault = SafeguardVault()
@@ -79,7 +79,7 @@ class TestFR02_ManualBankEntry(unittest.TestCase):
 
 
 class TestFR03_KillSwitch(unittest.TestCase):
-    """FR-03 — Kill Switch blocks transactions when active."""
+    """FR-03: Kill Switch blocks transactions when active."""
 
     def setUp(self):
         self.vault = SafeguardVault()
@@ -98,7 +98,7 @@ class TestFR03_KillSwitch(unittest.TestCase):
 
 
 class TestFR04_TransactionForesight(unittest.TestCase):
-    """FR-04 — Balance preview math is correct before user confirms."""
+    """FR-04: Balance preview math is correct before user confirms."""
 
     def estimate_gas(self, gwei=20.0):
         return round(21_000 * gwei * 1e-9, 8)
