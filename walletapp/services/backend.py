@@ -1,6 +1,6 @@
+from __future__ import annotations
 from walletapp.services.market_service import MarketService
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol
