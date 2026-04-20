@@ -37,14 +37,14 @@ class StubBackend:
     A safe placeholder backend so the UI works end-to-end.
     Replace with real services later.
     """
+def __init__(self) -> None:
+    self._assets: list[Asset] = [
+        Asset(kind=AssetKind.CRYPTO, symbol="ETH", balance=1.234),
+        Asset(kind=AssetKind.CRYPTO, symbol="USDC", balance=250.00),
+        Asset(kind=AssetKind.STOCK, symbol="AAPL", balance=3.0),
+    ]
 
-    def __init__(self) -> None:
-        self._assets: list[Asset] = [
-            Asset(kind=AssetKind.CRYPTO, symbol="ETH", balance=1.234),
-            Asset(kind=AssetKind.CRYPTO, symbol="USDC", balance=250.00),
-            Asset(kind=AssetKind.STOCK, symbol="AAPL", balance=3.0),
-        ] 
-                self.market = MarketService()
+    self.market = MarketService()
 
         # Very rough placeholder pricing so portfolio + chart can change
         # when balances change. Replace with real API pricing later.
