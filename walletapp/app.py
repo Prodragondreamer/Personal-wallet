@@ -15,13 +15,7 @@ from walletapp.screens.main_screen import MainScreen
 from walletapp.screens.settings_screen import SettingsSecurityScreen
 from walletapp.screens.tx_preview_screen import TransactionPreviewScreen
 from walletapp.widgets.pie_chart import PieChart  # noqa: F401
-from walletapp.backend.safeguard_vault import SafeguardVault
 
-
-class PersonalWalletApp(App):
-    def build(self):
-        self.backend = SafeguardVault()
-        return super().build()
 
 class WalletScreenManager(ScreenManager):
     """
