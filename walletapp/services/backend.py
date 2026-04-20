@@ -1,3 +1,5 @@
+from walletapp.services.market_service import MarketService
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -37,11 +39,13 @@ class StubBackend:
     """
 
     def __init__(self) -> None:
+    self.market = MarketService()
+        """
         self._assets: list[Asset] = [
             Asset(kind=AssetKind.CRYPTO, symbol="ETH", balance=1.234),
             Asset(kind=AssetKind.CRYPTO, symbol="USDC", balance=250.00),
             Asset(kind=AssetKind.STOCK, symbol="AAPL", balance=3.0),
-        ]
+        ] """
         # Very rough placeholder pricing so portfolio + chart can change
         # when balances change. Replace with real API pricing later.
         self._prices_usd: dict[str, float] = {
