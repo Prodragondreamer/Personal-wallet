@@ -60,8 +60,16 @@ class StubBackend:
     def get_portfolio_total_usd(self) -> float:
         total = 0.0
         for a in self._assets:
-            price = self._prices_usd.get(a.symbol, 1.0)
-            total += float(a.balance) * float(price)
+    symbol = a.symbol.upper()
+
+    if symbol in ["ETH", "BTC"]:
+        price = self.market.get_crypto_price(symbol.lower())
+    elif symbol in ["AAPL"]:
+        price = self.market.get_stock_price(symbol)
+    else:
+        price = 1.0
+
+    total += float(a.balance) * float(price)
         return total
 
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
