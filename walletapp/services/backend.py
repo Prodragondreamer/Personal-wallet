@@ -48,11 +48,11 @@ def __init__(self) -> None:
 
         # Very rough placeholder pricing so portfolio + chart can change
         # when balances change. Replace with real API pricing later.
-     """   self._prices_usd: dict[str, float] = {
-            "USDC": 1.00,
-            "ETH": 3000.00,
-            "AAPL": 190.00,
-        } """
+     #   self._prices_usd: dict[str, float] = {
+        #    "USDC": 1.00,
+      #      "ETH": 3000.00,
+       #     "AAPL": 190.00,
+      #  } 
 
     def list_assets(self) -> list[Asset]:
         return list(self._assets)
