@@ -19,7 +19,7 @@ A personal crypto wallet mobile app built with Python and Kivy, featuring real-t
 git clone https://github.com/Prodragondreamer/Personal-wallet.git
 cd Personal-wallet
 
-# 2. Switch to the main branch
+# 2. Switch to the backend branch
 git checkout backend-and-security
 
 # 3. Create and activate a virtual environment
