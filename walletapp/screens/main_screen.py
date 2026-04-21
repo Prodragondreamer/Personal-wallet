@@ -18,8 +18,8 @@ class MainScreen(WalletScreen):
         "Loading…\nOpen Vault if you need to create or unlock the wallet."
     )
     vault_strip_color = ListProperty([0.45, 0.55, 0.65, 1.0])
-    _loaded           = BooleanProperty(False)  # tracks if prices have loaded once
-    _fetching         = BooleanProperty(False)  # prevents overlapping fetches
+    is_fetching       = BooleanProperty(False)  # KV binds to this for the indicator
+    _loaded           = BooleanProperty(False)  # True after first successful load
 
     def on_pre_enter(self, *args) -> None:
         app = self.manager.app  # type: ignore[attr-defined]
@@ -39,18 +39,17 @@ class MainScreen(WalletScreen):
             self.vault_status      = ""
             self.vault_strip_color = [0.55, 0.60, 0.70, 1.0]
 
-        # show "Fetching prices..." on the very first load
-        # on  refreshes keep showing the last known values
-        # so the screen doesn't blank out while the thread runs
+        # First load — show placeholder text
+        # Refreshes — keep last values visible, just show the indicator
         if not self._loaded:
             self.portfolio_total = "Fetching prices..."
             self.system_status   = "Loading live prices..."
 
-        # don't start a second fetch if one is already running
-        if self._fetching:
+        # Prevent overlapping fetches
+        if self.is_fetching:
             return
 
-        self._fetching = True
+        self.is_fetching = True  # triggers ⟳ Updating... label in KV
         threading.Thread(
             target=self._fetch_prices,
             args=(app,),
@@ -115,8 +114,8 @@ class MainScreen(WalletScreen):
         """Runs back on the main thread — safe to update UI widgets here."""
         self.portfolio_total = f"${total:,.2f}"
         self.system_status   = status
-        self._loaded         = True   # prices have loaded at least once
-        self._fetching       = False  # allow next refresh to run
+        self._loaded         = True
+        self.is_fetching     = False  # hides the ⟳ Updating... label
 
         rv = self.ids.get("assets_rv")
         if rv:
