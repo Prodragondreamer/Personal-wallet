@@ -1,11 +1,3 @@
-"""
-Secure backend: SQLite + encrypted columns + encrypted private key material at rest.
-
-Maps to the assignment's Local Persistence component (Database, WalletRepository,
-UserSettingsRepository, EncryptionService). Passphrase unlocks the vault; keys are never
-written to disk in plaintext.
-"""
-
 from __future__ import annotations
 
 from walletapp.exceptions import VaultError
@@ -16,6 +8,7 @@ from walletapp.persistence.key_store import EncryptedKeyStore
 from walletapp.persistence.settings_repository import UserSettingsRepository
 from walletapp.persistence.wallet_repository import WalletRepository
 from walletapp.services.backend import BackendController, SendResult
+from walletapp.services.market_service import MarketService
 
 _UNLOCK_TOKEN = b"personal_wallet_mvp_unlock_v1"
 
@@ -28,11 +21,7 @@ class SecureWalletBackend(BackendController):
         self._wallet: WalletRepository | None = None
         self._settings: UserSettingsRepository | None = None
         self._keys: EncryptedKeyStore | None = None
-        self._prices_usd: dict[str, float] = {
-            "USDC": 1.00,
-            "ETH": 3000.00,
-            "AAPL": 190.00,
-        }
+        self._market = MarketService()
 
     @property
     def is_unlocked(self) -> bool:
@@ -148,7 +137,7 @@ class SecureWalletBackend(BackendController):
             return 0.0
         total = 0.0
         for a in holdings:
-            price = self._prices_usd.get(a.symbol, 1.0)
+            price = self._market.get_price(a.symbol, a.kind.value)
             total += float(a.balance) * float(price)
         return total
 
