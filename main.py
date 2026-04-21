@@ -1,6 +1,8 @@
 # Updated main.py logic for local and cloud interaction
+import sqlite3
 from web3 import Web3
 import yfinance as yf
+
 
 class SafeguardVault:
     def __init__(self, provider_url="https://sepolia.infura.io/v3/YOUR_ID"):
@@ -8,16 +10,15 @@ class SafeguardVault:
         self.w3 = Web3(Web3.HTTPProvider(provider_url))
         self.is_connected = self.w3.is_connected()
 
-    def __init__(self):
         # FR-02: Setup local database for manual bank entry
-        self.conn = sqlite3.connect(':memory:') # Use memory for testing
+        self.conn = sqlite3.connect(':memory:')  # Use memory for testing
         self.cursor = self.conn.cursor()
         self.cursor.execute('CREATE TABLE IF NOT EXISTS balance (amount REAL)')
         self.conn.commit()
 
     def update_manual_balance(self, amount):
         """Requirement FR-02: User manually inputs bank balance."""
-        self.cursor.execute('DELETE FROM balance') # Keep only current balance
+        self.cursor.execute('DELETE FROM balance')  # Keep only current balance
         self.cursor.execute('INSERT INTO balance VALUES (?)', (amount,))
         self.conn.commit()
         return True
@@ -33,6 +34,7 @@ class SafeguardVault:
         crypto_price = yf.Ticker(crypto_ticker).history(period="1d")['Close'].iloc[-1]
         # logic for unified view
         return float(manual_bank) + float(crypto_price)
+
 
 if __name__ == "__main__":
     app = SafeguardVault()
