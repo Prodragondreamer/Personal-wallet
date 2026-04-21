@@ -435,6 +435,7 @@
                                 hint_text: "0.00"
                                 input_filter: "float"
                                 on_text: root.clear_error()
+                                on_text_validate: self.focus = False
 
                     BoxLayout:
                         size_hint_y: None
@@ -449,6 +450,7 @@
                                 id: to_address
                                 hint_text: "0x…"
                                 on_text: root.clear_error()
+                                on_text_validate: self.focus = False
 
                 Label:
                     size_hint_y: None
@@ -468,7 +470,7 @@
                         multiline: True
                         padding: dp(4), dp(8), dp(4), dp(8)
                         on_text: root.clear_error()
-
+                        on_text_validate: self.focus = False
                 Label:
                     size_hint_y: None
                     height: "26dp"
@@ -636,6 +638,7 @@
                         height: "44dp"
                         hint_text: "Vault passphrase"
                         password: True
+                        on_text_validate: self.focus = False
                     BoxLayout:
                         size_hint_y: None
                         height: "40dp"
