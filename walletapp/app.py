@@ -83,7 +83,6 @@ class PersonalWalletApp(App):
             fn_regular="walletapp/ui/assets/fonts/MaterialIcons-Regular.ttf",
         )
         Builder.load_file("walletapp/ui/wallet.kv")
-        Window.bind(on_touch_down=self._dismiss_keyboard)
  
         sm = WalletScreenManager()
         sm.app = self
@@ -93,17 +92,6 @@ class PersonalWalletApp(App):
         sm.add_widget(SettingsSecurityScreen(name="settings"))
         sm.current = "main"
         return sm
- 
-    def _dismiss_keyboard(self, window, touch):
-        from kivy.base import EventLoop
-        from kivy.uix.textinput import TextInput
-        win = EventLoop.window
-        if win:
-            # only dismiss if the touch is NOT on a TextInput
-            focused = [w for w in win.children if isinstance(w, TextInput) and w.focus]
-            if not focused:
-                win.release_all_keyboards()
-
 
 
 
