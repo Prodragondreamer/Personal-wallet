@@ -7,7 +7,7 @@ def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-# ── Schema ────────────────────────────────────────────────────
+# SQL SCHEME
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS transactions (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS bug_log (
 """
 
 
-# ── TransactionLogger ─────────────────────────────────────────
+# The Transaction Logger Logic
 class TransactionLogger:
 
     def __init__(self, db="wallet.db"):
@@ -89,7 +89,7 @@ class TransactionLogger:
         print(f"Exported to {path}")
 
 
-# ── BugLog ────────────────────────────────────────────────────
+# The Bug Log Logic
 class BugLog:
     _count = 0
 
@@ -126,7 +126,7 @@ class BugLog:
         print("─" * 60)
 
 
-# ── Demo ──────────────────────────────────────────────────────
+# Running it in general
 if __name__ == "__main__":
     import os; [os.remove(f) for f in ["wallet.db","report.json"] if os.path.exists(f)]
 
