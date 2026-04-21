@@ -96,3 +96,11 @@ class PersonalWalletApp(App):
 
         sm.current = "main"
         return sm
+
+    def _dismiss_keyboard(self, window, touch):
+    from kivy.base import EventLoop
+    win = EventLoop.window
+    if win:
+        win.release_all_keyboards()
+
+
