@@ -4,7 +4,7 @@ import threading
 from collections import defaultdict
 
 from kivy.clock import Clock
-from kivy.properties import ListProperty, StringProperty
+from kivy.properties import BooleanProperty, ListProperty, StringProperty
 
 from walletapp.screens.base import WalletScreen
 from walletapp.services.market_service import MarketService
@@ -18,6 +18,8 @@ class MainScreen(WalletScreen):
         "Loading…\nOpen Vault if you need to create or unlock the wallet."
     )
     vault_strip_color = ListProperty([0.45, 0.55, 0.65, 1.0])
+    _loaded           = BooleanProperty(False)  # tracks if prices have loaded once
+    _fetching         = BooleanProperty(False)  # prevents overlapping fetches
 
     def on_pre_enter(self, *args) -> None:
         app = self.manager.app  # type: ignore[attr-defined]
@@ -37,12 +39,18 @@ class MainScreen(WalletScreen):
             self.vault_status      = ""
             self.vault_strip_color = [0.55, 0.60, 0.70, 1.0]
 
-        # placeholder while app fetches live prices
-        self.portfolio_total = "Fetching prices..."
-        self.system_status   = "Loading live prices..."
+        # show "Fetching prices..." on the very first load
+        # on  refreshes keep showing the last known values
+        # so the screen doesn't blank out while the thread runs
+        if not self._loaded:
+            self.portfolio_total = "Fetching prices..."
+            self.system_status   = "Loading live prices..."
 
-        # api is now on backround thread so our
-        # ui doesn't freeze
+        # don't start a second fetch if one is already running
+        if self._fetching:
+            return
+
+        self._fetching = True
         threading.Thread(
             target=self._fetch_prices,
             args=(app,),
@@ -99,7 +107,6 @@ class MainScreen(WalletScreen):
             legend_lines = ["Error loading prices"]
             status       = f"Error fetching prices: {e}"
 
-        # send results back to the main thread via Clock
         Clock.schedule_once(
             lambda dt: self._update_ui(total, rows, chart_values, legend_lines, status)
         )
@@ -108,6 +115,8 @@ class MainScreen(WalletScreen):
         """Runs back on the main thread — safe to update UI widgets here."""
         self.portfolio_total = f"${total:,.2f}"
         self.system_status   = status
+        self._loaded         = True   # prices have loaded at least once
+        self._fetching       = False  # allow next refresh to run
 
         rv = self.ids.get("assets_rv")
         if rv:
