@@ -15,7 +15,6 @@ class SendResult:
 
 
 class BackendController(Protocol):
-
     def list_assets(self) -> list[Asset]: ...
     def get_portfolio_total_usd(self) -> float: ...
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview: ...
@@ -23,7 +22,6 @@ class BackendController(Protocol):
 
 
 class StubBackend:
-
     def __init__(self) -> None:
         self._assets: list[Asset] = [
             Asset(kind=AssetKind.CRYPTO, symbol="ETH",  balance=1.234),
@@ -47,7 +45,6 @@ class StubBackend:
                 price = 1.0
             total += float(a.balance) * float(price)
         return total
-─
 
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
         est_fee = 1.25
@@ -71,7 +68,3 @@ class StubBackend:
             return SendResult(ok=True, tx_hash="0xDEMO_TX_HASH")
 
         return SendResult(ok=False, error=f"Unknown asset symbol: {d.symbol}")
-                return SendResult(ok=True, tx_hash="0xDEMO_TX_HASH")
-    
-            return SendResult(ok=False, error=f"Unknown asset symbol: {d.symbol}")
-    
