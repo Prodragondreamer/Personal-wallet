@@ -25,7 +25,7 @@ git checkout backend-and-security
 # 3. Create and activate a virtual environment
 py -3.11 -m venv venv
 venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Mac/Linux
+source venv/bin/activate   # Mac/Linux
 
 # 4. Install dependencies
 pip install -r requirements.txt
