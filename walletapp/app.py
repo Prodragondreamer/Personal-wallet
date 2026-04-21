@@ -83,6 +83,7 @@ class PersonalWalletApp(App):
             fn_regular="walletapp/ui/assets/fonts/MaterialIcons-Regular.ttf",
         )
         Builder.load_file("walletapp/ui/wallet.kv")
+        Window.bind(on_touch_down=self._dismiss_keyboard)
 
         sm = WalletScreenManager()
         sm.app = self
