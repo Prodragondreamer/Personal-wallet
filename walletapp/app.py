@@ -98,9 +98,13 @@ class PersonalWalletApp(App):
         return sm
 
     def _dismiss_keyboard(self, window, touch):
-        from kivy.base import EventLoop
-        win = EventLoop.window
-        if win:
+    from kivy.base import EventLoop
+    from kivy.uix.textinput import TextInput
+    win = EventLoop.window
+    if win:
+        # only dismiss if the touch is NOT on a TextInput
+        focused = [w for w in win.children if isinstance(w, TextInput) and w.focus]
+        if not focused:
             win.release_all_keyboards()
 
 
