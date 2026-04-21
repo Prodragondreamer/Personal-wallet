@@ -1,3 +1,7 @@
-kivy>=2.2.0
+kivy>=2.3.1
 cryptography>=42.0.0
 flask
+requests
+pycoingecko
+yfinance
+web3
