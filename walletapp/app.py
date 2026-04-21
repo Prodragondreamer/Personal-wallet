@@ -78,6 +78,7 @@ class PersonalWalletApp(App):
             b.unlock(unlock_pw)
 
     def build(self) -> WalletScreenManager:
+        from kivy.core.window import Window
         LabelBase.register(
             name="MaterialIcons",
             fn_regular="walletapp/ui/assets/fonts/MaterialIcons-Regular.ttf",
