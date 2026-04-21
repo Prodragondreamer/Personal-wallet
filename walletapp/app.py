@@ -5,6 +5,7 @@ from typing import Any
 
 from kivy.app import App
 from kivy.core.text import LabelBase
+from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, SlideTransition
 
@@ -78,7 +79,6 @@ class PersonalWalletApp(App):
             b.unlock(unlock_pw)
 
     def build(self) -> WalletScreenManager:
-        from kivy.core.window import Window
         LabelBase.register(
             name="MaterialIcons",
             fn_regular="walletapp/ui/assets/fonts/MaterialIcons-Regular.ttf",
