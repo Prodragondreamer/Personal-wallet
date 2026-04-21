@@ -96,5 +96,3 @@ The app uses `SecureWalletBackend` (`walletapp/services/secure_backend.py`) with
 - **Encryption at rest** — balances and settings are Fernet ciphertext
 - **Private key material** — stored only as ciphertext; cleartext exists in memory only during signing, never logged
 - **Lock / unlock** — Lock clears derived keys from memory; all reads return empty and sends are rejected until unlocked
-
-### Optional Environment Variables (Dev Only)
