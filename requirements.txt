@@ -1,5 +1,7 @@
-web3==6.0.0
-yfinance==0.2.31
-pycoingecko==3.1.0
-kivy==2.2.1
+kivy>=2.3.1
+cryptography>=42.0.0
+flask
 requests
+pycoingecko
+yfinance
+web3
