@@ -205,6 +205,96 @@
     multiline: False
     write_tab: False
 
+# ---- Better looking dropdowns (Spinner) ----
+<FluidSpinnerOption@SpinnerOption>:
+    background_normal: ""
+    background_down: ""
+    background_color: (0, 0, 0, 0)
+    color: (1, 1, 1, 1)
+    halign: "center"
+    valign: "middle"
+    text_size: self.size
+    size_hint_y: None
+    height: "52dp"
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.20)
+        RoundedRectangle:
+            pos: self.x + dp(8), self.y + dp(2)
+            size: self.width - dp(16), self.height - dp(4)
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+        Color:
+            rgba: (0.22, 0.45, 0.95, 0.35) if self.state == "down" else (0.18, 0.19, 0.24, 0.95)
+        RoundedRectangle:
+            pos: self.x + dp(8), self.y + dp(4)
+            size: self.width - dp(16), self.height - dp(8)
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+        Color:
+            rgba: (1, 1, 1, 1)
+        RoundedRectangle:
+            texture: app.btn_gloss_tex_subtle
+            pos: self.x + dp(8), self.y + dp(4)
+            size: self.width - dp(16), self.height - dp(8)
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+
+<FluidDropDown@DropDown>:
+    # Scrollable dropdown (DropDown uses a ScrollView when max_height is set)
+    # show ~3 options at a time (options are 52dp tall)
+    max_height: dp(52 * 3 + 24)
+    auto_width: False
+    width: (self.attach_to.width if self.attach_to else dp(240))
+    background_normal: ""
+    background_down: ""
+    background_color: (0, 0, 0, 0)
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.40)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(3)
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (0.12, 0.13, 0.16, 0.98)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+        Color:
+            rgba: (1, 1, 1, 1)
+        RoundedRectangle:
+            texture: app.btn_gloss_tex_subtle
+            pos: self.pos
+            size: self.size
+            radius: [dp(18), dp(18), dp(18), dp(18)]
+
+<FluidSpinner@Spinner>:
+    background_normal: ""
+    background_down: ""
+    background_color: (0, 0, 0, 0)
+    color: (1, 1, 1, 1)
+    option_cls: "FluidSpinnerOption"
+    dropdown_cls: "FluidDropDown"
+    canvas.before:
+        Color:
+            rgba: (0, 0, 0, 0.28)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(2)
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        Color:
+            rgba: (0.16, 0.17, 0.21, 1) if self.state == "normal" else (0.13, 0.14, 0.18, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        Color:
+            rgba: (1, 1, 1, 1)
+        RoundedRectangle:
+            texture: app.btn_gloss_tex_subtle
+            pos: self.pos
+            size: self.size
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+
 <WalletNavBar@BoxLayout>:
     # floating "pill" nav bar
     size_hint_y: None
@@ -258,10 +348,8 @@
             spacing: dp(10)
             IconChipButton:
                 text: u"\ue5d2"  # menu
+                on_release: app.root.set_current("markets")
             Widget:
-            IconChipButton:
-                text: u"\ue88a"  # home
-                on_release: app.root.set_current("main")
 
         ScrollView:
             # This expands and prevents "everything at bottom" packing.
@@ -348,12 +436,24 @@
                     orientation: "vertical"
                     spacing: "10dp"
                     padding: dp(14), dp(14)
-                    Label:
+                    BoxLayout:
                         size_hint_y: None
-                        height: self.texture_size[1]
-                        text: root.chart_value_label if root.chart_value_label else "Select an asset"
-                        bold: True
-                        color: (0.92, 0.93, 0.96, 1)
+                        height: "44dp"
+                        spacing: dp(10)
+                        Label:
+                            text: root.chart_value_label if root.chart_value_label else "Select an asset"
+                            bold: True
+                            color: (0.92, 0.93, 0.96, 1)
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+                        FluidSpinner:
+                            size_hint: None, None
+                            width: "92dp"
+                            height: "40dp"
+                            text: root.selected_zoom
+                            values: root.zoom_values
+                            on_text: root.set_zoom(self.text)
 
                     ScrollView:
                         size_hint_y: None
@@ -375,8 +475,9 @@
                         size_hint_y: None
                         height: "150dp"
                         points_y: root.chart_points
+                        labels_x: root.chart_labels
                         rgba: root.chart_color
-                        on_hover_value: root.on_chart_hover(self.hover_value)
+                        on_hover_value: root.on_chart_hover(self.hover_value, self.hover_label)
 
                     BoxLayout:
                         size_hint_y: None
@@ -410,6 +511,9 @@
                     RoundedButton:
                         text: "New Transaction"
                         on_release: app.root.set_current("asset_entry")
+                    RoundedButtonSecondary:
+                        text: "Add Funds"
+                        on_release: app.root.set_current("add_funds")
                     RoundedButtonSecondary:
                         text: "Refresh"
                         on_release: root.on_pre_enter()
@@ -450,6 +554,240 @@
                             orientation: "vertical"
 
         WalletNavBar:
+
+
+<MarketsScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5c4"  # arrow_back
+                on_release: app.root.set_current("main")
+            Label:
+                text: "Markets"
+                bold: True
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            IconChipButton:
+                text: u"\ue5d5"  # refresh
+                on_release: root.refresh()
+
+        Label:
+            size_hint_y: None
+            height: self.texture_size[1] + dp(6)
+            text: root.status_text
+            color: (0.72, 0.74, 0.80, 1)
+            font_size: "12sp"
+            text_size: self.width, None
+            halign: "left"
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: "12dp"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "10dp"
+                    padding: dp(16), dp(14)
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Top crypto"
+                        bold: True
+                        color: (0.92, 0.93, 0.96, 1)
+                    RecycleView:
+                        size_hint_y: None
+                        height: dp(220)
+                        viewclass: "MarketRow"
+                        data: root.crypto_rows
+                        RecycleBoxLayout:
+                            default_size: None, dp(44)
+                            default_size_hint: 1, None
+                            size_hint_y: None
+                            height: self.minimum_height
+                            orientation: "vertical"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "10dp"
+                    padding: dp(16), dp(14)
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Top stocks"
+                        bold: True
+                        color: (0.92, 0.93, 0.96, 1)
+                    RecycleView:
+                        size_hint_y: None
+                        height: dp(220)
+                        viewclass: "MarketRow"
+                        data: root.stock_rows
+                        RecycleBoxLayout:
+                            default_size: None, dp(44)
+                            default_size_hint: 1, None
+                            size_hint_y: None
+                            height: self.minimum_height
+                            orientation: "vertical"
+
+        WalletNavBar:
+
+
+<AddFundsScreen>:
+    AppRoot:
+        orientation: "vertical"
+        padding: "14dp"
+        spacing: "12dp"
+
+        BoxLayout:
+            size_hint_y: None
+            height: "56dp"
+            padding: 0, dp(6)
+            spacing: dp(10)
+            IconChipButton:
+                text: u"\ue5c4"  # arrow_back
+                on_release: app.root.set_current("main")
+            Label:
+                text: "Add funds"
+                bold: True
+                halign: "left"
+                valign: "middle"
+                text_size: self.size
+            IconChipButton:
+                text: u"\ue5d5"  # refresh
+                on_release: root.on_pre_enter()
+
+        ScrollView:
+            size_hint_y: 1
+            do_scroll_x: False
+            bar_width: "6dp"
+            BoxLayout:
+                orientation: "vertical"
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: "12dp"
+
+                Label:
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(6)
+                    text: "Top up your demo wallet. Vault must be unlocked."
+                    font_size: "12sp"
+                    color: (0.72, 0.74, 0.80, 1)
+                    text_size: self.width, None
+                    halign: "left"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "12dp"
+                    padding: dp(16), dp(14)
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Type"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            FluidSpinner:
+                                id: asset_kind
+                                text: "Crypto"
+                                values: ["Crypto", "Stock", "Cash"]
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Asset"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            FluidSpinner:
+                                id: asset_symbol
+                                text: root.asset_values[0] if root.asset_values else "ETH"
+                                values: root.asset_values
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "40dp"
+                        spacing: "10dp"
+                        Label:
+                            text: "Amount"
+                            size_hint_x: 0.40
+                        RoundedField:
+                            size_hint_x: 0.60
+                            RoundedTextInput:
+                                id: amount
+                                hint_text: "0.00"
+                                input_filter: "float"
+
+                    BoxLayout:
+                        size_hint_y: None
+                        height: "44dp"
+                        spacing: "10dp"
+                        RoundedButton:
+                            text: "Add"
+                            on_release: root.add_funds()
+                        RoundedButtonSecondary:
+                            text: "Clear"
+                            on_release:
+                                amount.text = ""
+                                root.status_text = ""
+
+                Label:
+                    size_hint_y: None
+                    height: self.texture_size[1] + dp(8) if root.status_text else 0
+                    opacity: 1 if root.status_text else 0
+                    text: root.status_text
+                    color: (0.60, 0.90, 0.60, 1) if root.status_text.startswith("Added") else (0.95, 0.35, 0.35, 1)
+                    text_size: self.width, None
+                    halign: "left"
+
+        WalletNavBar:
+
+
+<MarketRow>:
+    size_hint_y: None
+    height: dp(44)
+    spacing: dp(10)
+    padding: 0, dp(6)
+    Label:
+        text: root.symbol
+        size_hint_x: 0.22
+        bold: True
+        color: (0.92, 0.93, 0.96, 1)
+        halign: "left"
+        valign: "middle"
+        text_size: self.size
+    Label:
+        text: root.price
+        size_hint_x: 0.48
+        color: (0.85, 0.86, 0.90, 1)
+        halign: "left"
+        valign: "middle"
+        text_size: self.size
+    Label:
+        text: root.change
+        size_hint_x: 0.30
+        color: root.change_color
+        halign: "right"
+        valign: "middle"
+        text_size: self.size
 
 
 <AssetEntryScreen>:
@@ -520,13 +858,10 @@
                             size_hint_x: 0.40
                         RoundedField:
                             size_hint_x: 0.60
-                            Spinner:
+                            FluidSpinner:
                                 id: asset_kind
                                 text: "Crypto"
                                 values: ["Crypto", "Stock", "Cash"]
-                                background_normal: ""
-                                background_down: ""
-                                background_color: (0, 0, 0, 0)
                                 on_text: root.clear_error()
 
                     BoxLayout:

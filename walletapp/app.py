@@ -13,10 +13,13 @@ from kivy.uix.screenmanager import ScreenManager, SlideTransition
 from walletapp.services.backend import BackendController
 from walletapp.services.secure_backend import SecureWalletBackend
 from walletapp.screens.asset_entry_screen import AssetEntryScreen
+from walletapp.screens.add_funds_screen import AddFundsScreen
 from walletapp.screens.main_screen import MainScreen
+from walletapp.screens.markets_screen import MarketsScreen
 from walletapp.screens.settings_screen import SettingsSecurityScreen
 from walletapp.screens.tx_preview_screen import TransactionPreviewScreen
 from walletapp.widgets.line_chart import LineChart  # noqa: F401
+from walletapp.widgets.market_row import MarketRow  # noqa: F401
 from walletapp.widgets.pie_chart import PieChart  # noqa: F401
 
 
@@ -28,7 +31,7 @@ class WalletScreenManager(ScreenManager):
     app: "PersonalWalletApp"
 
     # tab ordering for left/right slide direction
-    tab_order = ["main", "asset_entry", "tx_preview", "settings"]
+    tab_order = ["main", "markets", "add_funds", "asset_entry", "tx_preview", "settings"]
 
     def set_current(self, name: str) -> None:
         """
@@ -115,6 +118,8 @@ class PersonalWalletApp(App):
         sm = WalletScreenManager()
         sm.app = self
         sm.add_widget(MainScreen(name="main"))
+        sm.add_widget(MarketsScreen(name="markets"))
+        sm.add_widget(AddFundsScreen(name="add_funds"))
         sm.add_widget(AssetEntryScreen(name="asset_entry"))
         sm.add_widget(TransactionPreviewScreen(name="tx_preview"))
         sm.add_widget(SettingsSecurityScreen(name="settings"))

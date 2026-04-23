@@ -3,7 +3,7 @@ from __future__ import annotations
 from kivy.core.text import Label as CoreLabel
 from kivy.graphics import Color, Line, Mesh, RoundedRectangle, Rectangle
 from kivy.metrics import dp
-from kivy.properties import BooleanProperty, ListProperty, NumericProperty
+from kivy.properties import BooleanProperty, ListProperty, NumericProperty, StringProperty
 from kivy.uix.widget import Widget
 
 
@@ -16,14 +16,20 @@ class LineChart(Widget):
     """
 
     points_y = ListProperty([])  # list[float]
+    labels_x = ListProperty([])  # list[str] aligned with points_y
     rgba = ListProperty([0.95, 0.80, 0.20, 1.0])
     hover_value = NumericProperty(0.0)
+    hover_label = StringProperty("")
+    hover_index = NumericProperty(-1)
     is_scrubbing = BooleanProperty(False)
 
     def on_points_y(self, *_args) -> None:
         self._redraw()
 
     def on_rgba(self, *_args) -> None:
+        self._redraw()
+
+    def on_labels_x(self, *_args) -> None:
         self._redraw()
 
     def on_size(self, *_args) -> None:
@@ -63,6 +69,8 @@ class LineChart(Widget):
         pts = [float(v) for v in (self.points_y or [])]
         if len(pts) < 2:
             self.hover_value = 0.0
+            self.hover_label = ""
+            self.hover_index = -1
             return
 
         pad_x = self.width * 0.04
@@ -76,7 +84,10 @@ class LineChart(Widget):
         t = (touch.x - left) / (right - left)
         i = int(round(max(0.0, min(1.0, t)) * float(n - 1)))
         i = max(0, min(n - 1, i))
+        self.hover_index = i
         self.hover_value = float(pts[i])
+        labels = list(self.labels_x or [])
+        self.hover_label = labels[i] if i < len(labels) else ""
 
     def _redraw(self) -> None:
         self.canvas.clear()
@@ -129,12 +140,27 @@ class LineChart(Widget):
             Color(r, g, b, a)
             Line(points=xy, width=1.6)
 
+            # X-axis labels (start / mid / end)
+            labels = list(self.labels_x or [])
+            if len(labels) >= 3:
+                for j, idx in enumerate([0, len(labels) // 2, len(labels) - 1]):
+                    txt = labels[idx]
+                    lab = CoreLabel(text=txt, font_size=dp(10), color=(0.72, 0.74, 0.80, 1))
+                    lab.refresh()
+                    tw, th = lab.texture.size
+                    if j == 0:
+                        lx = left
+                    elif j == 1:
+                        lx = (left + right) / 2 - (tw / 2)
+                    else:
+                        lx = right - tw
+                    ly = self.y + dp(2)
+                    Color(1, 1, 1, 1)
+                    Rectangle(texture=lab.texture, pos=(lx, ly), size=(tw, th))
+
             if self.is_scrubbing:
-                # Find closest point for current hover value (cheap).
-                try:
-                    hi = min(range(n), key=lambda i: abs(pts[i] - float(self.hover_value)))
-                except Exception:
-                    hi = n - 1
+                hi = int(self.hover_index) if int(self.hover_index) >= 0 else n - 1
+                hi = max(0, min(n - 1, hi))
 
                 hx = left + dx * hi
                 hy = xy[hi * 2 + 1]
@@ -147,8 +173,10 @@ class LineChart(Widget):
                 Color(r, g, b, 1.0)
                 Line(circle=(hx, hy, dp(3.5)), width=1.6)
 
-                # Price bubble
-                label = CoreLabel(text=f"${float(self.hover_value):,.2f}", font_size=dp(12), color=(1, 1, 1, 1))
+                # Price + time bubble
+                when = (self.hover_label or "").strip()
+                text = f"{when}\n${float(self.hover_value):,.2f}" if when else f"${float(self.hover_value):,.2f}"
+                label = CoreLabel(text=text, font_size=dp(12), color=(1, 1, 1, 1))
                 label.refresh()
                 tw, th = label.texture.size
 

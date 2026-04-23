@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import random
 import threading
 from collections import defaultdict
 
@@ -25,14 +27,23 @@ class MainScreen(WalletScreen):
 
     selected_symbol = StringProperty("")
     selected_range = StringProperty("Week")  # Day|Week|Month|Year|All
+    selected_zoom = StringProperty("1h")  # resolution varies by range
+    zoom_values = ListProperty([])  # values for the zoom picker
     chart_points = ListProperty([])  # list[float]
+    chart_labels = ListProperty([])  # list[str]
     chart_color = ListProperty([0.95, 0.80, 0.20, 1.0])
     chart_value_label = StringProperty("")
 
-    _history_cache: dict[tuple[str, str], list[float]] = {}
+    _history_cache: dict[tuple[str, str, str], tuple[list[str], list[float]]] = {}
     _kind_by_symbol: dict[str, str] = {}
+    _history_inflight: set[tuple[str, str, str]] = set()
+    _preload_started: set[tuple[str, str, str]] = set()
+    _market: MarketService | None = None
 
     def on_pre_enter(self, *args) -> None:
+        if self._market is None:
+            self._market = MarketService()
+        self._sync_zoom_defaults()
         app = self.manager.app  # type: ignore[attr-defined]
         b   = app.backend
 
@@ -81,7 +92,60 @@ class MainScreen(WalletScreen):
 
     def select_range(self, label: str) -> None:
         self.selected_range = (label or "Week").strip().title()
+        self._sync_zoom_defaults(reset=True)
         self._refresh_chart()
+
+    def set_zoom(self, label: str) -> None:
+        self.selected_zoom = (label or "").strip()
+        self._refresh_chart()
+
+    def _sync_zoom_defaults(self, *, reset: bool = False) -> None:
+        """
+        Provide sensible zoom options per range.
+        """
+        rng = (self.selected_range or "Week").strip().title()
+        if rng == "Day":
+            vals = ["30m", "20m", "15m", "10m", "5m", "1m"]
+        elif rng == "Week":
+            vals = ["4h", "2h", "1h", "30m", "15m"]
+        elif rng == "Month":
+            vals = ["1d", "12h", "6h", "1h"]
+        elif rng == "Year":
+            vals = ["1wk", "1d"]
+        else:  # All
+            vals = ["3mo", "1mo"]
+        self.zoom_values = vals
+        if reset or (self.selected_zoom not in vals):
+            self.selected_zoom = vals[2] if rng == "Week" else vals[0]
+
+    def _zoom_minutes(self) -> int | None:
+        """
+        Convert selected_zoom into minutes for resampling/bucketing.
+        Supports: Xm, Xh, Xd, Xwk, Xmo.
+        """
+        raw = (self.selected_zoom or "").strip().lower().replace(" ", "")
+        if not raw:
+            return None
+        try:
+            if raw.endswith("mo"):
+                n = int(raw[:-2])
+                return n * 43_200  # 30d
+            if raw.endswith("wk"):
+                n = int(raw[:-2])
+                return n * 10_080
+            if raw.endswith("d"):
+                n = int(raw[:-1])
+                return n * 1_440
+            if raw.endswith("h"):
+                n = int(raw[:-1])
+                return n * 60
+            if raw.endswith("m"):
+                n = int(raw[:-1])
+                return n
+            # bare number means minutes
+            return int(raw)
+        except Exception:
+            return None
 
     def _refresh_chart(self) -> None:
         sym = (self.selected_symbol or "").strip().upper()
@@ -91,17 +155,112 @@ class MainScreen(WalletScreen):
             self.chart_value_label = ""
             return
 
-        key = (sym, rng)
-        if key not in self._history_cache:
-            market = MarketService()
-            kind = self._kind_by_symbol.get(sym, "Crypto")
-            self._history_cache[key] = market.get_history(sym, kind, rng)
-        pts = list(self._history_cache[key])
-        self.chart_points = pts
-        if pts:
-            self.chart_value_label = f"{sym} • ${pts[-1]:,.2f}"
+        zoom_min = self._zoom_minutes()
+        zoom_key = (self.selected_zoom or "") if zoom_min else ""
+        key = (sym, rng, zoom_key)
+        cached = self._history_cache.get(key)
+        if cached:
+            labels, pts = cached
+            self.chart_labels = list(labels)
+            self.chart_points = list(pts)
+            if pts:
+                self.chart_value_label = f"{sym} • ${pts[-1]:,.2f}"
+            return
 
-    def on_chart_hover(self, value: float) -> None:
+        # Don’t block the UI thread waiting on network. Fetch in background.
+        market = self._market or MarketService()
+        kind = self._kind_by_symbol.get(sym, "Crypto")
+        # Instant non-flat placeholder curve so UI never looks stuck.
+        spot = float(market.get_price(sym, kind))
+        instant = self._instant_series(sym, rng, spot=spot)
+        self.chart_labels = ["" for _ in range(len(instant))]
+        self.chart_points = list(instant)
+        self.chart_value_label = f"{sym} • ${instant[-1]:,.2f}"
+        if key in self._history_inflight:
+            return
+        self._history_inflight.add(key)
+
+        def _fetch_history() -> None:
+            labels: list[str] = []
+            pts: list[float] = []
+            try:
+                market2 = self._market or MarketService()
+                kind2 = self._kind_by_symbol.get(sym, "Crypto")
+                labels, pts = market2.get_history_series(sym, kind2, rng, interval_minutes=zoom_min)
+            except Exception:
+                labels, pts = ([], [])
+
+            def _apply(_dt: float) -> None:
+                self._history_inflight.discard(key)
+                if len(pts) >= 2:
+                    self._history_cache[key] = (list(labels), list(pts))
+                # Only apply if user is still on same selection.
+                if (self.selected_symbol or "").strip().upper() != sym:
+                    return
+                if (self.selected_range or "Week").strip().title() != rng:
+                    return
+                if len(pts) >= 2:
+                    self.chart_labels = list(labels)
+                    self.chart_points = list(pts)
+                    self.chart_value_label = f"{sym} • ${pts[-1]:,.2f}"
+
+            Clock.schedule_once(_apply)
+
+        threading.Thread(target=_fetch_history, daemon=True).start()
+
+    def _instant_series(self, symbol: str, range_label: str, *, spot: float) -> list[float]:
+        """
+        Very fast local series (no network) used while real history loads.
+        """
+        n = {"Day": 24, "Week": 48, "Month": 72, "Year": 96, "All": 120}.get(range_label, 48)
+        n = max(24, int(n))
+        base = max(0.01, float(spot))
+        amp = base * (0.002 if symbol in ("USDC", "USDT", "DAI") else 0.02)
+        seed = sum(ord(c) for c in symbol) * 1009 + sum(ord(c) for c in range_label)
+        r = random.Random(seed)
+        drift = (r.random() - 0.5) * (amp / max(1, n))
+        out: list[float] = []
+        v = base * (0.99 + 0.02 * r.random())
+        for i in range(n):
+            t = i / max(1, n - 1)
+            wave = math.sin(t * math.pi * 2.0) * (0.6 * amp)
+            noise = (r.random() - 0.5) * (0.35 * amp)
+            v = max(0.01, v + drift + wave * 0.05 + noise * 0.10)
+            out.append(v)
+        out[-1] = base
+        return out
+
+    def _preload_history(self, symbols: list[str]) -> None:
+        """
+        Prefetch chart history so taps feel instant.
+        Only preloads a small set to avoid rate-limits.
+        """
+        if not symbols:
+            return
+        market = self._market or MarketService()
+        # Preload current range + Week (most common)
+        ranges = list(dict.fromkeys([(self.selected_range or "Week").strip().title(), "Week"]))
+        zoom_min = self._zoom_minutes()
+        zoom_key = (self.selected_zoom or "") if zoom_min else ""
+
+        def _job() -> None:
+            for sym in symbols[:4]:
+                kind = self._kind_by_symbol.get(sym, "Crypto")
+                for rng in ranges[:2]:
+                    k = (sym, rng, zoom_key)
+                    if k in self._preload_started or k in self._history_cache:
+                        continue
+                    self._preload_started.add(k)
+                    try:
+                        labels, pts = market.get_history_series(sym, kind, rng, interval_minutes=zoom_min)
+                        if len(pts) >= 2:
+                            self._history_cache[k] = (list(labels), list(pts))
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_job, daemon=True).start()
+
+    def on_chart_hover(self, value: float, label: str = "") -> None:
         sym = (self.selected_symbol or "").strip().upper()
         if not sym:
             return
@@ -110,20 +269,37 @@ class MainScreen(WalletScreen):
         except Exception:
             return
         if v > 0:
-            self.chart_value_label = f"{sym} • ${v:,.2f}"
+            when = (label or "").strip()
+            if when:
+                self.chart_value_label = f"{sym} • ${v:,.2f} • {when}"
+            else:
+                self.chart_value_label = f"{sym} • ${v:,.2f}"
 
     def _fetch_prices(self, app) -> None:
         """Runs on a background thread — never touch UI widgets here."""
         try:
             total  = app.backend.get_portfolio_total_usd()
             assets = app.backend.list_assets()
-            market = MarketService()
+            market = self._market or MarketService()
 
             self._kind_by_symbol = {a.symbol.upper(): a.kind.value for a in assets}
 
+            crypto_syms = [a.symbol.upper() for a in assets if a.kind.value == "Crypto"]
+            stock_syms = [a.symbol.upper() for a in assets if a.kind.value == "Stock"]
+            cash_syms = [a.symbol.upper() for a in assets if a.kind.value == "Cash"]
+
+            crypto_q = market.get_crypto_quotes(crypto_syms) if crypto_syms else {}
+            stock_q = market.get_stock_quotes(stock_syms) if stock_syms else {}
+
             rows = []
             for a in assets:
-                price     = market.get_price(a.symbol, a.kind.value)
+                sym = a.symbol.upper()
+                if a.kind.value == "Crypto":
+                    price = float(crypto_q.get(sym, (market.get_price(sym, "Crypto"), None))[0])
+                elif a.kind.value == "Stock":
+                    price = float(stock_q.get(sym, (market.get_price(sym, "Stock"), None))[0])
+                else:
+                    price = float(market.get_price(sym, a.kind.value))
                 usd_value = float(a.balance) * price
                 rows.append({
                     "text": (
@@ -196,6 +372,9 @@ class MainScreen(WalletScreen):
                     if sym:
                         symbols.append(sym)
                 symbols = list(dict.fromkeys(symbols))
+
+                # Start preloading history now that we know which symbols exist.
+                self._preload_history(symbols)
 
                 if not self.selected_symbol and symbols:
                     self.selected_symbol = symbols[0]

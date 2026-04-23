@@ -130,6 +130,31 @@ class SecureWalletBackend(BackendController):
         except VaultError:
             return []
 
+    def credit_asset(self, kind: AssetKind, symbol: str, amount: float) -> None:
+        """
+        Add funds to a holding (demo/top-up). Persists to the encrypted DB.
+        """
+        if not self.is_unlocked or self._wallet is None:
+            raise VaultError("Vault is locked.")
+        symbol = (symbol or "").strip().upper()
+        if not symbol:
+            raise VaultError("Missing symbol.")
+        amt = float(amount)
+        if amt <= 0:
+            raise VaultError("Amount must be greater than 0.")
+
+        # Find existing balance (if any) and add.
+        cur_bal = 0.0
+        try:
+            for a in self._wallet.get_holdings():
+                if a.symbol.upper() == symbol and a.kind == kind:
+                    cur_bal = float(a.balance)
+                    break
+        except VaultError:
+            cur_bal = 0.0
+
+        self._wallet.replace_symbol_balance(symbol, cur_bal + amt, kind)
+
     def get_portfolio_total_usd(self) -> float:
         if not self.is_unlocked or self._wallet is None:
             return 0.0

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import datetime
+import math
+import random
 import time
 import requests
 
@@ -22,15 +25,18 @@ COIN_MAP: dict[str, str] = {
 
 # cache duration in seconds avoids hammering the API on every screen refresh
 _CACHE_TTL = 60
-_HISTORY_CACHE_TTL = 300
+_HISTORY_CACHE_TTL = 900
+_CHANGE_CACHE_TTL = 60
 
 
 class MarketService:
 
     def __init__(self) -> None:
         self.cg = CoinGeckoAPI()
+        self._session = requests.Session()
         self._cache: dict[str, tuple[float, float]] = {}
         self._history_cache: dict[str, tuple[list[float], float]] = {}
+        self._change_cache: dict[str, tuple[float | None, float]] = {}
         # last known prices used as fallback when everything is unreachable
         self._last_known: dict[str, float] = {
             "ETH":  3000.00,
@@ -143,44 +149,491 @@ class MarketService:
             return self.get_crypto_price(symbol)
         return self.get_stock_price(symbol)
 
-    def get_history(self, symbol: str, kind: str, range_label: str) -> list[float]:
+    def get_history_series(
+        self,
+        symbol: str,
+        kind: str,
+        range_label: str,
+        *,
+        interval_minutes: int | None = None,
+    ) -> tuple[list[str], list[float]]:
         """
-        Historical USD prices suitable for spark/line charts.
+        Historical series with timestamps formatted for UI.
 
-        - Crypto: CoinGecko market chart
-        - Stock: Yahoo Finance history
-        - Stablecoins / Cash: flat line at $1.00
+        Returns (labels, prices) where labels align 1:1 with prices.
         """
         symbol = (symbol or "").upper().strip()
         kind = (kind or "").strip().title()
         range_label = (range_label or "Week").strip().title()
 
         if not symbol:
-            return []
-        if kind == "Cash" or symbol in ("USDC", "USDT", "DAI"):
-            n = {"Day": 24, "Week": 30, "Month": 60, "Year": 120, "All": 180}.get(range_label, 30)
-            return [1.0 for _ in range(max(12, int(n)))]
+            return ([], [])
 
-        cache_key = f"hist:{kind}:{symbol}:{range_label}"
+        # Stablecoins / cash: flat series
+        if kind == "Cash" or symbol in ("USDC", "USDT", "DAI"):
+            n = {"Day": 24, "Week": 48, "Month": 72, "Year": 96, "All": 120}.get(range_label, 48)
+            n = max(24, int(n))
+            labels = self._make_time_labels(range_label, n)
+            return (labels, [1.0 for _ in range(n)])
+
+        int_part = str(int(interval_minutes)) if interval_minutes else "auto"
+        cache_key = f"hist2:{kind}:{symbol}:{range_label}:{int_part}"
         cached = self._history_cache.get(cache_key)
         if cached is not None:
             data, ts = cached
-            if time.time() - ts < _HISTORY_CACHE_TTL:
-                return list(data)
+            if time.time() - ts < _HISTORY_CACHE_TTL and isinstance(data, list) and len(data) == 2:
+                labels, prices = data
+                return (list(labels), list(prices))
+
+        labels: list[str] = []
+        prices: list[float] = []
+        if kind == "Crypto" or symbol in COIN_MAP:
+            labels, prices = self._get_crypto_history_series(symbol, range_label, interval_minutes=interval_minutes)
+        else:
+            labels, prices = self._get_stock_history_series(symbol, range_label, interval_minutes=interval_minutes)
+
+        if len(prices) < 2:
+            # Fallback 1: reuse any last good series for this symbol
+            prev = self._history_cache.get(f"hist2:any:{symbol}")
+            if prev is not None and isinstance(prev[0], list) and len(prev[0]) == 2:
+                labels, prices = prev[0]
+                labels, prices = list(labels), list(prices)
+            else:
+                # Fallback 2: synthetic series around spot (never flat)
+                spot = float(self.get_price(symbol, kind))
+                prices = self._synthetic_history(symbol, range_label, spot=spot)
+                labels = self._make_time_labels(range_label, len(prices))
+
+        # Remember last good per symbol
+        if len(prices) >= 2:
+            self._history_cache[f"hist2:any:{symbol}"] = ([list(labels), list(prices)], time.time())
+
+        self._history_cache[cache_key] = ([list(labels), list(prices)], time.time())
+        return (list(labels), list(prices))
+
+    def get_history(self, symbol: str, kind: str, range_label: str) -> list[float]:
+        # Back-compat: return prices only
+        _labels, prices = self.get_history_series(symbol, kind, range_label)
+        return prices
+
+    def get_change_pct(self, symbol: str, kind: str) -> float | None:
+        """
+        Percent change used in the Markets screen.
+
+        - Crypto: 24h % change from CoinGecko
+        - Stock: day % change (prev close -> last close) from Yahoo
+        """
+        symbol = (symbol or "").upper().strip()
+        kind = (kind or "").strip().title()
+        if not symbol:
+            return None
+
+        cache_key = f"chg:{kind}:{symbol}"
+        cached = self._change_cache.get(cache_key)
+        if cached is not None:
+            val, ts = cached
+            if time.time() - ts < _CHANGE_CACHE_TTL:
+                return val
+
+        if kind == "Cash" or symbol in ("USDC", "USDT", "DAI"):
+            self._change_cache[cache_key] = (0.0, time.time())
+            return 0.0
+
+        val: float | None
+        if kind == "Crypto" or symbol in COIN_MAP:
+            val = self._get_crypto_change_pct(symbol)
+        else:
+            val = self._get_stock_change_pct(symbol)
+
+        self._change_cache[cache_key] = (val, time.time())
+        return val
+
+    def _get_crypto_change_pct(self, symbol: str) -> float | None:
+        coin_id = COIN_MAP.get(symbol, symbol.lower())
+        try:
+            data = self.cg.get_price(ids=coin_id, vs_currencies="usd", include_24hr_change="true")
+            raw = data.get(coin_id, {}).get("usd_24h_change", None)
+            return None if raw is None else float(raw)
+        except Exception:
+            return None
+
+    # ---- Bulk quote helpers (faster UI) ----
+    def get_crypto_quotes(self, symbols: list[str]) -> dict[str, tuple[float, float | None]]:
+        """
+        Fetch price + 24h % change for multiple crypto symbols in ONE call.
+        Returns: { "ETH": (price, change_pct), ... }
+        """
+        syms = [s.upper().strip() for s in (symbols or []) if (s or "").strip()]
+        if not syms:
+            return {}
+
+        # Stablecoins: treat as $1 and 0% change
+        out: dict[str, tuple[float, float | None]] = {}
+        stable = {"USDC", "USDT", "DAI"}
+        req_syms = [s for s in syms if s not in stable]
+        for s in syms:
+            if s in stable:
+                out[s] = (1.0, 0.0)
+
+        if not req_syms:
+            return out
+
+        ids = []
+        for s in req_syms:
+            ids.append(COIN_MAP.get(s, s.lower()))
+        ids_csv = ",".join(sorted(set(ids)))
+
+        # Fast path: direct CoinGecko HTTP with a strict timeout (pycoingecko can hang).
+        data = None
+        try:
+            url = "https://api.coingecko.com/api/v3/simple/price"
+            resp = self._session.get(
+                url,
+                params={
+                    "ids": ids_csv,
+                    "vs_currencies": "usd",
+                    "include_24hr_change": "true",
+                },
+                timeout=4,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+        except Exception:
+            data = None
+
+        if not data:
+            # Fallback to per-symbol cached/last-known prices (instant).
+            for s in req_syms:
+                out[s] = (float(self.get_crypto_price(s)), self.get_change_pct(s, "Crypto"))
+            return out
+
+        # map id -> original symbol(s)
+        id_to_syms: dict[str, list[str]] = {}
+        for s in req_syms:
+            cid = COIN_MAP.get(s, s.lower())
+            id_to_syms.setdefault(cid, []).append(s)
+
+        for cid, payload in (data or {}).items():
+            try:
+                price = float((payload or {}).get("usd", 0.0))
+            except Exception:
+                price = 0.0
+            chg_raw = (payload or {}).get("usd_24h_change", None)
+            try:
+                chg = None if chg_raw is None else float(chg_raw)
+            except Exception:
+                chg = None
+            if price > 0:
+                # store cached spot
+                for sym in id_to_syms.get(cid, []):
+                    self._store(sym, price)
+                    self._change_cache[f"chg:Crypto:{sym}"] = (chg, time.time())
+                    out[sym] = (price, chg)
+
+        # any missing ones: fallback
+        for s in req_syms:
+            if s not in out:
+                out[s] = (float(self.get_crypto_price(s)), self.get_change_pct(s, "Crypto"))
+        return out
+
+    def get_stock_quotes(self, tickers: list[str]) -> dict[str, tuple[float, float | None]]:
+        """
+        Fetch price + % change for multiple tickers in ONE call.
+        Returns: { "AAPL": (price, change_pct), ... }
+        """
+        syms = [t.upper().strip() for t in (tickers or []) if (t or "").strip()]
+        if not syms:
+            return {}
+
+        out: dict[str, tuple[float, float | None]] = {}
+        # Fast path: Yahoo quote endpoint (single request, no cookie/crumb dance).
+        try:
+            url = "https://query1.finance.yahoo.com/v7/finance/quote"
+            resp = self._session.get(url, params={"symbols": ",".join(syms)}, timeout=4)
+            if resp.status_code == 200:
+                payload = resp.json() or {}
+                results = (payload.get("quoteResponse") or {}).get("result") or []
+                for r in results:
+                    sym = str(r.get("symbol", "")).upper()
+                    if not sym:
+                        continue
+                    price = r.get("regularMarketPrice", None)
+                    chg = r.get("regularMarketChangePercent", None)
+                    try:
+                        price_f = float(price)
+                    except Exception:
+                        price_f = 0.0
+                    try:
+                        chg_f = None if chg is None else float(chg)
+                    except Exception:
+                        chg_f = None
+                    if price_f > 0:
+                        self._store(sym, price_f)
+                        self._change_cache[f"chg:Stock:{sym}"] = (chg_f, time.time())
+                        out[sym] = (price_f, chg_f)
+        except Exception:
+            pass
+
+        # Fallback for any missing symbols: yfinance bulk download (slower).
+        missing = [s for s in syms if s not in out]
+        if missing:
+            try:
+                df = yf.download(
+                    tickers=" ".join(missing),
+                    period="2d",
+                    interval="1d",
+                    group_by="ticker",
+                    threads=True,
+                    progress=False,
+                )
+            except Exception:
+                df = None
+
+            if df is None or getattr(df, "empty", True):
+                for s in missing:
+                    out[s] = (float(self.get_stock_price(s)), self.get_change_pct(s, "Stock"))
+                return out
+
+            multi = getattr(df, "columns", None)
+            is_multi = hasattr(multi, "levels") and len(getattr(multi, "levels", [])) >= 2
+            for s in missing:
+                try:
+                    closes = df[(s, "Close")].dropna().values if is_multi else df["Close"].dropna().values
+                    if len(closes) == 0:
+                        raise ValueError("no closes")
+                    last = float(closes[-1])
+                    prev = float(closes[-2]) if len(closes) >= 2 else last
+                    chg2 = None if prev == 0 else ((last - prev) / prev) * 100.0
+                    if last > 0:
+                        self._store(s, last)
+                        self._change_cache[f"chg:Stock:{s}"] = (chg2, time.time())
+                        out[s] = (last, chg2)
+                    else:
+                        raise ValueError("bad close")
+                except Exception:
+                    out[s] = (float(self.get_stock_price(s)), self.get_change_pct(s, "Stock"))
+
+        return out
+
+    def _get_stock_change_pct(self, ticker: str) -> float | None:
+        try:
+            data = yf.Ticker(ticker).history(period="2d")
+            if data is None or getattr(data, "empty", True):
+                return None
+            closes = data.get("Close")
+            if closes is None or len(closes.values) < 2:
+                return None
+            prev = float(closes.values[-2])
+            last = float(closes.values[-1])
+            if prev == 0:
+                return None
+            return ((last - prev) / prev) * 100.0
+        except Exception:
+            return None
+
+    def _make_time_labels(self, range_label: str, n: int) -> list[str]:
+        """
+        Best-effort labels when we don't have real timestamps.
+        """
+        n = max(2, int(n))
+        if range_label == "Day":
+            # show hours
+            return [f"{i:02d}:00" for i in range(n)]
+        if range_label in ("Week", "Month"):
+            # just ordinal-ish markers
+            return [f"{i+1}" for i in range(n)]
+        # Year / All
+        return [f"{i+1}" for i in range(n)]
+
+    def _fmt_label(self, range_label: str, ts_s: float) -> str:
+        dt = datetime.fromtimestamp(ts_s)
+        if range_label == "Day":
+            return dt.strftime("%H:%M")
+        if range_label == "Week":
+            return dt.strftime("%a %H:%M")
+        if range_label == "Month":
+            return dt.strftime("%b %d")
+        if range_label == "Year":
+            return dt.strftime("%b")
+        return dt.strftime("%Y-%m")
+
+    def _get_crypto_history_series(
+        self, symbol: str, range_label: str, *, interval_minutes: int | None = None
+    ) -> tuple[list[str], list[float]]:
+        coin_id = COIN_MAP.get(symbol, symbol.lower())
+        days: int | str
+        if range_label == "Day":
+            days = 1
+        elif range_label == "Week":
+            days = 7
+        elif range_label == "Month":
+            days = 30
+        elif range_label == "Year":
+            days = 365
+        else:
+            days = "max"
+
+        try:
+            data = self.cg.get_coin_market_chart_by_id(id=coin_id, vs_currency="usd", days=days)
+            prices_raw: Iterable[list[float]] = data.get("prices", []) or []
+            ts_ms = [float(p[0]) for p in prices_raw if p and len(p) >= 2]
+            vals = [float(p[1]) for p in prices_raw if p and len(p) >= 2]
+
+            if interval_minutes and interval_minutes > 0:
+                ts_ms, vals = self._bucket_resample_ms(ts_ms, vals, bucket_minutes=interval_minutes)
+            if len(vals) > 240:
+                step = max(1, len(vals) // 180)
+                ts_ms = ts_ms[::step]
+                vals = vals[::step]
+            labels = [self._fmt_label(range_label, t / 1000.0) for t in ts_ms]
+            return (labels, vals)
+        except Exception:
+            return ([], [])
+
+    def _get_stock_history_series(
+        self, ticker: str, range_label: str, *, interval_minutes: int | None = None
+    ) -> tuple[list[str], list[float]]:
+        period, interval = ("5d", "1h")
+        resample_to: int | None = None
+        if range_label == "Day":
+            # Yahoo supports specific intraday intervals; we resample for 10m/20m.
+            if interval_minutes in (1,):
+                period, interval = ("1d", "1m")
+            elif interval_minutes in (5,):
+                period, interval = ("1d", "5m")
+            elif interval_minutes in (10, 20):
+                period, interval = ("1d", "5m")
+                resample_to = int(interval_minutes)
+            elif interval_minutes in (15,):
+                period, interval = ("1d", "15m")
+            else:
+                period, interval = ("1d", "30m")
+        elif range_label == "Week":
+            period = "5d"
+            if interval_minutes in (15, 30):
+                interval = f"{int(interval_minutes)}m"
+            elif interval_minutes in (60, 90):
+                interval = "60m" if interval_minutes == 60 else "90m"
+            elif interval_minutes and interval_minutes > 90:
+                interval = "60m"
+                resample_to = int(interval_minutes)
+            else:
+                interval = "60m"
+        elif range_label == "Month":
+            period = "1mo"
+            if interval_minutes and interval_minutes < 1_440:
+                # Fetch 60m and resample to 6h/12h/etc
+                interval = "60m"
+                if interval_minutes > 60:
+                    resample_to = int(interval_minutes)
+            else:
+                interval = "1d"
+        elif range_label == "Year":
+            period = "1y"
+            if interval_minutes and interval_minutes >= 10_080:
+                interval = "1wk"
+            else:
+                interval = "1d"
+        elif range_label == "All":
+            period = "max"
+            if interval_minutes and interval_minutes >= 129_600:
+                interval = "3mo"
+            else:
+                interval = "1mo"
+
+        try:
+            df = yf.Ticker(ticker).history(period=period, interval=interval)
+            if df is None or getattr(df, "empty", True):
+                return ([], [])
+            closes = df.get("Close")
+            if closes is None:
+                return ([], [])
+            vals = [float(v) for v in closes.values if v == v]
+            # Index timestamps
+            idx = getattr(df, "index", None)
+            ts = []
+            if idx is not None:
+                try:
+                    ts = [float(getattr(t, "timestamp")()) for t in idx.to_pydatetime()]  # type: ignore[attr-defined]
+                except Exception:
+                    ts = []
+            if ts and len(ts) == len(vals):
+                labels = [self._fmt_label(range_label, t) for t in ts]
+            else:
+                labels = self._make_time_labels(range_label, len(vals))
+
+            if resample_to and range_label == "Day":
+                labels, vals = self._downsample_by_step(labels, vals, from_minutes=5, to_minutes=resample_to)
+            elif resample_to and range_label in ("Week", "Month"):
+                # if we fetched 60m, resample from 60m
+                labels, vals = self._downsample_by_step(labels, vals, from_minutes=60, to_minutes=resample_to)
+
+            if len(vals) > 240:
+                step = max(1, len(vals) // 180)
+                vals = vals[::step]
+                labels = labels[::step]
+            return (labels, vals)
+        except Exception:
+            return ([], [])
+
+    def _bucket_resample_ms(
+        self, ts_ms: list[float], vals: list[float], *, bucket_minutes: int
+    ) -> tuple[list[float], list[float]]:
+        """
+        Resample irregular CG timestamps into minute buckets, taking last value in each bucket.
+        """
+        if not ts_ms or len(ts_ms) != len(vals) or bucket_minutes <= 0:
+            return (ts_ms, vals)
+        bucket_ms = bucket_minutes * 60_000
+        out_t: list[float] = []
+        out_v: list[float] = []
+        last_bucket = None
+        for t, v in zip(ts_ms, vals):
+            b = int(t // bucket_ms)
+            if last_bucket is None or b != last_bucket:
+                out_t.append(t)
+                out_v.append(v)
+                last_bucket = b
+            else:
+                # same bucket: replace with latest
+                out_t[-1] = t
+                out_v[-1] = v
+        return (out_t, out_v)
+
+    def _downsample_by_step(
+        self,
+        labels: list[str],
+        vals: list[float],
+        *,
+        from_minutes: int,
+        to_minutes: int,
+    ) -> tuple[list[str], list[float]]:
+        if not labels or len(labels) != len(vals) or from_minutes <= 0 or to_minutes <= 0:
+            return (labels, vals)
+        step = max(1, int(round(to_minutes / from_minutes)))
+        return (labels[::step], vals[::step])
+
+    def _synthetic_history(self, symbol: str, range_label: str, *, spot: float) -> list[float]:
+        n = {"Day": 24, "Week": 60, "Month": 120, "Year": 180, "All": 240}.get(range_label, 60)
+        n = max(24, int(n))
+        base = max(0.01, float(spot))
+        amp = base * (0.003 if symbol in ("USDC", "USDT", "DAI") else 0.03)
+
+        seed = sum(ord(c) for c in symbol) * 1009 + sum(ord(c) for c in range_label)
+        r = random.Random(seed)
+        drift = (r.random() - 0.5) * (amp / max(1, n))
 
         out: list[float] = []
-        if kind == "Crypto" or symbol in COIN_MAP:
-            out = self._get_crypto_history(symbol, range_label)
-        else:
-            out = self._get_stock_history(symbol, range_label)
-
-        if not out:
-            # Fallback: at least return something reasonable (current spot)
-            spot = float(self.get_price(symbol, kind))
-            out = [spot for _ in range(24)]
-
-        self._history_cache[cache_key] = (list(out), time.time())
-        return list(out)
+        v = base * (0.985 + 0.03 * r.random())
+        for i in range(n):
+            t = i / max(1, n - 1)
+            wave = math.sin(t * math.pi * 2.0) * (0.55 * amp)
+            noise = (r.random() - 0.5) * (0.30 * amp)
+            v = max(0.01, v + drift + wave * 0.06 + noise * 0.12)
+            out.append(v)
+        # pull final point to spot so it feels current
+        out[-1] = (0.7 * base) + (0.3 * out[-1])
+        return out
 
     def _get_crypto_history(self, symbol: str, range_label: str) -> list[float]:
         coin_id = COIN_MAP.get(symbol, symbol.lower())
