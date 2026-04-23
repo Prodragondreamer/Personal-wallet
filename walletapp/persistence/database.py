@@ -6,7 +6,7 @@ import sqlite3
 from pathlib import Path
 from typing import Final
 
-SCHEMA_VERSION: Final[int] = 1
+SCHEMA_VERSION: Final[int] = 2
 
 DDL = """
 PRAGMA foreign_keys = ON;
@@ -37,6 +37,23 @@ CREATE TABLE IF NOT EXISTS wallet_keys (
     public_address TEXT,
     private_key_ciphertext BLOB NOT NULL
 );
+
+-- Transaction history (non-secret metadata; keys never stored here).
+CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    asset_kind TEXT NOT NULL,
+    symbol TEXT NOT NULL COLLATE NOCASE,
+    amount REAL NOT NULL,
+    to_address TEXT NOT NULL,
+    memo TEXT NOT NULL DEFAULT '',
+    network TEXT NOT NULL,
+    est_fee REAL NOT NULL DEFAULT 0.0,
+    total REAL NOT NULL DEFAULT 0.0,
+    status TEXT NOT NULL DEFAULT 'pending', -- pending|confirmed|blocked|failed
+    tx_hash TEXT,
+    error TEXT
+);
 """
 
 
@@ -64,6 +81,40 @@ class Database:
         if row is None:
             conn.execute(
                 "INSERT INTO meta (key, value) VALUES ('schema_version', ?)",
+                (str(SCHEMA_VERSION).encode("utf-8"),),
+            )
+            conn.commit()
+            return
+
+        # Lightweight migrations for older DBs.
+        try:
+            cur_version = int(bytes(row["value"]).decode("utf-8"))
+        except Exception:
+            cur_version = 1
+
+        if cur_version < 2:
+            # v2 introduces `transactions` history.
+            conn.executescript(
+                """
+                CREATE TABLE IF NOT EXISTS transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    created_at TEXT NOT NULL,
+                    asset_kind TEXT NOT NULL,
+                    symbol TEXT NOT NULL COLLATE NOCASE,
+                    amount REAL NOT NULL,
+                    to_address TEXT NOT NULL,
+                    memo TEXT NOT NULL DEFAULT '',
+                    network TEXT NOT NULL,
+                    est_fee REAL NOT NULL DEFAULT 0.0,
+                    total REAL NOT NULL DEFAULT 0.0,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    tx_hash TEXT,
+                    error TEXT
+                );
+                """
+            )
+            conn.execute(
+                "UPDATE meta SET value = ? WHERE key = 'schema_version'",
                 (str(SCHEMA_VERSION).encode("utf-8"),),
             )
             conn.commit()

@@ -556,11 +556,38 @@
             size_hint_y: 1
             do_scroll_x: False
             bar_width: "6dp"
-            Label:
-                text: root.summary_text
+            BoxLayout:
+                orientation: "vertical"
                 size_hint_y: None
-                text_size: (self.width - dp(10)), None
-                height: self.texture_size[1] + dp(10)
+                height: self.minimum_height
+                spacing: "12dp"
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "8dp"
+                    padding: dp(16), dp(14)
+                    Label:
+                        text: root.summary_text
+                        size_hint_y: None
+                        text_size: (self.width - dp(10)), None
+                        height: self.texture_size[1] + dp(10)
+
+                RoundedCard:
+                    orientation: "vertical"
+                    spacing: "8dp"
+                    padding: dp(16), dp(14)
+                    Label:
+                        size_hint_y: None
+                        height: self.texture_size[1]
+                        text: "Transaction history"
+                        bold: True
+                        color: (0.92, 0.93, 0.96, 1)
+                    Label:
+                        text: root.history_text
+                        size_hint_y: None
+                        text_size: (self.width - dp(10)), None
+                        height: self.texture_size[1] + dp(10)
+                        color: (0.85, 0.86, 0.90, 1)
 
         Label:
             size_hint_y: None

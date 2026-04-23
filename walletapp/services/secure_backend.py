@@ -6,6 +6,7 @@ from walletapp.persistence.database import Database
 from walletapp.persistence.encryption import PBKDF2_ITERATIONS, EncryptionService, generate_salt
 from walletapp.persistence.key_store import EncryptedKeyStore
 from walletapp.persistence.settings_repository import UserSettingsRepository
+from walletapp.persistence.transaction_repository import TransactionRepository, TransactionRecord
 from walletapp.persistence.wallet_repository import WalletRepository
 from walletapp.services.backend import BackendController, SendResult
 from walletapp.services.market_service import MarketService
@@ -17,6 +18,7 @@ class SecureWalletBackend(BackendController):
     def __init__(self, db_path: str) -> None:
         self._db = Database(db_path)
         self._db.init_schema()
+        self._tx = TransactionRepository(self._db)
         self._crypto: EncryptionService | None = None
         self._wallet: WalletRepository | None = None
         self._settings: UserSettingsRepository | None = None
@@ -181,3 +183,13 @@ class SecureWalletBackend(BackendController):
             # Signing would decrypt private key only in-memory here; never persist or log it.
             return SendResult(ok=True, tx_hash="0xSEPOLIA_TESTNET_DEMO_TX")
         return SendResult(ok=False, error=f"Unknown asset symbol: {d.symbol}")
+
+    # ---- Transaction history helpers (UI can call via hasattr) ----
+    def log_transaction_preview(self, preview: TransactionPreview) -> int:
+        return self._tx.log_preview(preview)
+
+    def log_transaction_result(self, tx_id: int, result: SendResult) -> None:
+        self._tx.update_result(tx_id, result)
+
+    def list_transactions(self, limit: int = 50) -> list[TransactionRecord]:
+        return self._tx.list_recent(limit=limit)
