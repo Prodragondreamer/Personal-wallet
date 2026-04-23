@@ -49,9 +49,9 @@ class StubBackend:
         except Exception:
             price = 0.0
 
-        total += float(a.balance) * float(price)
+          total += float(a.balance) * float(price)
 
-    return total
+        return total
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
         est_fee = 1.25
         total = float(draft.amount) + est_fee
