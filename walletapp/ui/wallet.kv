@@ -205,6 +205,48 @@
     multiline: False
     write_tab: False
 
+# ---- Modern iOS-style switch (custom widget, no default OFF text) ----
+<ModernSwitch>:
+    size_hint: None, None
+    size: dp(56), dp(32)
+    canvas.before:
+        # track shadow
+        Color:
+            rgba: (0, 0, 0, 0.35)
+        RoundedRectangle:
+            pos: self.x, self.y - dp(2)
+            size: self.size
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+        # track fill
+        Color:
+            rgba: (0.22, 0.45, 0.95, 1) if self.active else (0.22, 0.24, 0.30, 1)
+        RoundedRectangle:
+            pos: self.pos
+            size: self.size
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+        # gloss
+        Color:
+            rgba: (1, 1, 1, 1)
+        RoundedRectangle:
+            texture: app.btn_gloss_tex_subtle
+            pos: self.pos
+            size: self.size
+            radius: [dp(16), dp(16), dp(16), dp(16)]
+        # thumb shadow
+        Color:
+            rgba: (0, 0, 0, 0.38)
+        RoundedRectangle:
+            pos: (self.x + dp(2) + (self.width - self.height) * self.thumb_t), self.y - dp(1)
+            size: (self.height - dp(2)), (self.height - dp(2))
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+        # thumb
+        Color:
+            rgba: (0.95, 0.96, 0.98, 1)
+        RoundedRectangle:
+            pos: (self.x + dp(2) + (self.width - self.height) * self.thumb_t), self.y + dp(1)
+            size: (self.height - dp(2)), (self.height - dp(2))
+            radius: [dp(14), dp(14), dp(14), dp(14)]
+
 # ---- Better looking dropdowns (Spinner) ----
 <FluidSpinnerOption@SpinnerOption>:
     background_normal: ""
@@ -526,6 +568,22 @@
                         height: self.texture_size[1] + dp(4)
                         text: "Assets"
                         bold: True
+                    BoxLayout:
+                        size_hint_y: None
+                        height: ("44dp" if (root.vault_exists and (not root.vault_unlocked)) else 0)
+                        opacity: (1 if (root.vault_exists and (not root.vault_unlocked)) else 0)
+                        spacing: "10dp"
+                        Label:
+                            text: "Vault is locked — unlock to view assets."
+                            color: (1.0, 0.80, 0.55, 1)
+                            halign: "left"
+                            valign: "middle"
+                            text_size: self.size
+                        RoundedButtonSecondary:
+                            text: "Open Vault"
+                            size_hint_x: None
+                            width: "110dp"
+                            on_release: app.root.set_current("settings")
                     BoxLayout:
                         size_hint_y: None
                         height: "170dp"
@@ -1141,48 +1199,48 @@
 
                     BoxLayout:
                         size_hint_y: None
-                        height: "40dp"
+                        height: "44dp"
                         spacing: "10dp"
                         Label:
                             text: "Kill switch"
-                            size_hint_x: 0.70
+                            size_hint_x: 0.74
                             text_size: self.size
                             halign: "left"
                             valign: "middle"
                             shorten: True
                             shorten_from: "right"
-                        Switch:
+                        ModernSwitch:
                             active: root.killswitch_enabled
                             on_active: root.toggle_killswitch(self.active)
 
                     BoxLayout:
                         size_hint_y: None
-                        height: "40dp"
+                        height: "44dp"
                         spacing: "10dp"
                         Label:
                             text: "Require PIN (placeholder)"
-                            size_hint_x: 0.70
+                            size_hint_x: 0.74
                             text_size: self.size
                             halign: "left"
                             valign: "middle"
                             shorten: True
                             shorten_from: "right"
-                        Switch:
+                        ModernSwitch:
                             active: False
 
                     BoxLayout:
                         size_hint_y: None
-                        height: "40dp"
+                        height: "44dp"
                         spacing: "10dp"
                         Label:
                             text: "Biometrics (placeholder)"
-                            size_hint_x: 0.70
+                            size_hint_x: 0.74
                             text_size: self.size
                             halign: "left"
                             valign: "middle"
                             shorten: True
                             shorten_from: "right"
-                        Switch:
+                        ModernSwitch:
                             active: False
 
         BoxLayout:

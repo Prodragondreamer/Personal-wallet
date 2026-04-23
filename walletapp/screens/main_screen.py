@@ -18,6 +18,8 @@ from walletapp.services.secure_backend import SecureWalletBackend
 class MainScreen(WalletScreen):
     portfolio_total   = StringProperty("$0.00")
     vault_status      = StringProperty("")
+    vault_exists      = BooleanProperty(False)
+    vault_unlocked    = BooleanProperty(False)
     system_status     = StringProperty(
         "Loading…\nOpen Vault if you need to create or unlock the wallet."
     )
@@ -48,6 +50,8 @@ class MainScreen(WalletScreen):
         b   = app.backend
 
         if isinstance(b, SecureWalletBackend):
+            self.vault_exists = bool(b.vault_exists())
+            self.vault_unlocked = bool(b.is_unlocked)
             if not b.vault_exists():
                 self.vault_status      = "Create an encrypted vault under Vault."
                 self.vault_strip_color = [0.95, 0.45, 0.35, 1.0]
@@ -60,6 +64,8 @@ class MainScreen(WalletScreen):
         else:
             self.vault_status      = ""
             self.vault_strip_color = [0.55, 0.60, 0.70, 1.0]
+            self.vault_exists = False
+            self.vault_unlocked = True
 
         # First load — show placeholder text
         # Refreshes — keep last values visible, just show the indicator
@@ -278,7 +284,6 @@ class MainScreen(WalletScreen):
     def _fetch_prices(self, app) -> None:
         """Runs on a background thread — never touch UI widgets here."""
         try:
-            total  = app.backend.get_portfolio_total_usd()
             assets = app.backend.list_assets()
             market = self._market or MarketService()
 
@@ -292,6 +297,7 @@ class MainScreen(WalletScreen):
             stock_q = market.get_stock_quotes(stock_syms) if stock_syms else {}
 
             rows = []
+            total = 0.0
             for a in assets:
                 sym = a.symbol.upper()
                 if a.kind.value == "Crypto":
@@ -301,6 +307,7 @@ class MainScreen(WalletScreen):
                 else:
                     price = float(market.get_price(sym, a.kind.value))
                 usd_value = float(a.balance) * price
+                total += usd_value
                 rows.append({
                     "text": (
                         f"{a.symbol:<6}  "

@@ -18,8 +18,11 @@ class MarketsScreen(WalletScreen):
     _top_cryptos = ["BTC", "ETH", "SOL", "BNB", "ADA"]
     _top_stocks = ["AAPL", "MSFT", "TSLA", "NVDA", "AMZN"]
     _refresh_ev = None
+    _market: MarketService | None = None
 
     def on_pre_enter(self, *args) -> None:
+        if self._market is None:
+            self._market = MarketService()
         # Auto-refresh every 15s while on this screen.
         if self._refresh_ev is None:
             self._refresh_ev = Clock.schedule_interval(lambda _dt: self.refresh(), 15.0)
@@ -39,30 +42,44 @@ class MarketsScreen(WalletScreen):
             return
         self.is_fetching = True
         self.status_text = "Updating prices…"
-        # Only show placeholders the very first time (keep last prices visible on refresh).
-        if not self.crypto_rows:
-            self.crypto_rows = [self._placeholder(sym) for sym in self._top_cryptos]
-        if not self.stock_rows:
-            self.stock_rows = [self._placeholder(sym) for sym in self._top_stocks]
+        # Always show instant (non-network) prices immediately, then replace with live.
+        market = self._market or MarketService()
+        self.crypto_rows = [
+            {"symbol": s, "price": f"${market.fast_price(s, 'Crypto'):,.2f}", "change": "…", "change_color": (0.72, 0.74, 0.80, 1)}
+            for s in self._top_cryptos
+        ]
+        self.stock_rows = [
+            {"symbol": s, "price": f"${market.fast_price(s, 'Stock'):,.2f}", "change": "…", "change_color": (0.72, 0.74, 0.80, 1)}
+            for s in self._top_stocks
+        ]
         threading.Thread(target=self._fetch, daemon=True).start()
 
     def _fetch(self) -> None:
-        market = MarketService()
+        market = self._market or MarketService()
         try:
             cq = market.get_crypto_quotes(self._top_cryptos)
             sq = market.get_stock_quotes(self._top_stocks)
 
             crypto = []
             for sym in self._top_cryptos:
-                price, chg = cq.get(sym, (market.get_price(sym, "Crypto"), market.get_change_pct(sym, "Crypto")))
+                # Never call network per-row here; bulk quotes already did best-effort.
+                price, chg = cq.get(sym, (market.fast_price(sym, "Crypto"), None))
                 crypto.append(self._row(sym, float(price), chg))
 
             stocks = []
             for sym in self._top_stocks:
-                price, chg = sq.get(sym, (market.get_price(sym, "Stock"), market.get_change_pct(sym, "Stock")))
+                price, chg = sq.get(sym, (market.fast_price(sym, "Stock"), None))
                 stocks.append(self._row(sym, float(price), chg))
 
-            status = "Live prices (CoinGecko + Yahoo Finance)."
+            # If we couldn't get any % changes, we're likely on cached/relay-only mode.
+            any_change = any((cq.get(s, (0.0, None))[1] is not None) for s in self._top_cryptos) or any(
+                (sq.get(s, (0.0, None))[1] is not None) for s in self._top_stocks
+            )
+            status = (
+                "Live prices (CoinGecko + Yahoo Finance)."
+                if any_change
+                else "Prices updated (relay/cached). Changes may be unavailable."
+            )
         except Exception as e:
             crypto = []
             stocks = []

@@ -20,6 +20,7 @@ from walletapp.screens.settings_screen import SettingsSecurityScreen
 from walletapp.screens.tx_preview_screen import TransactionPreviewScreen
 from walletapp.widgets.line_chart import LineChart  # noqa: F401
 from walletapp.widgets.market_row import MarketRow  # noqa: F401
+from walletapp.widgets.modern_switch import ModernSwitch  # noqa: F401
 from walletapp.widgets.pie_chart import PieChart  # noqa: F401
 
 

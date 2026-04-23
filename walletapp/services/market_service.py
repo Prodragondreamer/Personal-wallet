@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from datetime import datetime
 import math
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import requests
 
@@ -37,15 +38,22 @@ class MarketService:
         self._cache: dict[str, tuple[float, float]] = {}
         self._history_cache: dict[str, tuple[list[float], float]] = {}
         self._change_cache: dict[str, tuple[float | None, float]] = {}
+        # previous observed price (used to compute a fallback % change)
+        self._prev_known: dict[str, float] = {}
         # last known prices used as fallback when everything is unreachable
         self._last_known: dict[str, float] = {
             "ETH":  3000.00,
             "BTC":  65000.00,
             "USDC": 1.00,
             "SOL":  150.00,
+            "BNB":  600.00,
+            "ADA":  0.55,
+            "DOGE": 0.15,
             "AAPL": 190.00,
             "TSLA": 250.00,
             "MSFT": 420.00,
+            "NVDA": 900.00,
+            "AMZN": 180.00,
         }
 
     def _cached(self, key: str) -> float | None:
@@ -58,9 +66,71 @@ class MarketService:
 
     def _store(self, key: str, price: float) -> float:
         """Save to cache and last known, then return price."""
+        # keep a previous observed point (not seeded defaults) for fallback change %
+        try:
+            if key in self._cache:
+                prev = float(self._cache[key][0])
+                if prev > 0 and float(price) > 0:
+                    self._prev_known[key] = prev
+        except Exception:
+            pass
         self._cache[key] = (price, time.time())
         self._last_known[key] = price
         return price
+
+    def _fallback_change_pct(self, symbol: str, new_price: float) -> float | None:
+        """
+        When providers don't supply % change (rate limits, blocked endpoints),
+        compute a best-effort change from the previous observed price.
+        """
+        sym = (symbol or "").upper().strip()
+        try:
+            prev = float(self._prev_known.get(sym, 0.0))
+            cur = float(new_price)
+        except Exception:
+            return None
+        if prev <= 0 or cur <= 0:
+            return None
+        return ((cur - prev) / prev) * 100.0
+
+    def _note_observed_price(self, symbol: str, price: float) -> None:
+        """
+        Record an observed price point for fallback % change calculations.
+        Unlike `_store`, this works even when the fetched price equals cached.
+        """
+        sym = (symbol or "").upper().strip()
+        try:
+            cur = float(price)
+        except Exception:
+            return
+        if not sym or cur <= 0:
+            return
+        try:
+            if sym in self._cache:
+                prev = float(self._cache[sym][0])
+                if prev > 0:
+                    self._prev_known[sym] = prev
+        except Exception:
+            pass
+        # also refresh the cache timestamp so "previous" advances next time
+        self._cache[sym] = (cur, time.time())
+        self._last_known[sym] = cur
+
+    def fast_price(self, symbol: str, kind: str) -> float:
+        """
+        Fast, non-blocking price.
+        Never hits the network: uses cache -> last_known -> $1 for cash/stables.
+        """
+        sym = (symbol or "").upper().strip()
+        k = (kind or "").strip().title()
+        if not sym:
+            return 0.0
+        if k == "Cash" or sym in ("USDC", "USDT", "DAI"):
+            return 1.0
+        cached = self._cached(sym)
+        if cached is not None:
+            return float(cached)
+        return float(self._last_known.get(sym, 0.0))
 
     def _fetch_from_heroku(self, symbol: str, kind: str) -> float | None:
         """
@@ -70,7 +140,7 @@ class MarketService:
         """
         try:
             url      = f"{HEROKU_URL}/price/{symbol}/{kind}"
-            response = requests.get(url, timeout=5)
+            response = self._session.get(url, timeout=2)
             if response.status_code == 200:
                 price = float(response.json().get("price", 0.0))
                 if price > 0:
@@ -78,6 +148,31 @@ class MarketService:
         except Exception:
             pass
         return None
+
+    def _bulk_from_heroku(self, symbols: list[str], kind: str) -> dict[str, float]:
+        """
+        Best-effort bulk pricing via Heroku relay.
+        Runs requests concurrently with tight timeouts so Markets never "sticks".
+        """
+        syms = [s.upper().strip() for s in (symbols or []) if (s or "").strip()]
+        if not syms:
+            return {}
+        out: dict[str, float] = {}
+
+        def _one(sym: str) -> tuple[str, float | None]:
+            return (sym, self._fetch_from_heroku(sym, kind))
+
+        # Small pool; we're only ever fetching ~10 rows.
+        with ThreadPoolExecutor(max_workers=min(8, max(1, len(syms)))) as ex:
+            futs = [ex.submit(_one, s) for s in syms]
+            for f in as_completed(futs, timeout=3):
+                try:
+                    sym, price = f.result()
+                    if price is not None and float(price) > 0:
+                        out[sym] = float(price)
+                except Exception:
+                    continue
+        return out
 
     def get_crypto_price(self, symbol: str) -> float:
         """
@@ -97,13 +192,19 @@ class MarketService:
         if heroku_price is not None:
             return heroku_price
 
-        # fall back to direct CoinGecko call
+        # fall back to direct CoinGecko call (requests with tight timeout)
         coin_id = COIN_MAP.get(symbol, symbol.lower())
         try:
-            data  = self.cg.get_price(ids=coin_id, vs_currencies="usd")
-            price = float(data.get(coin_id, {}).get("usd", 0.0))
-            if price > 0:
-                return self._store(symbol, price)
+            resp = self._session.get(
+                "https://api.coingecko.com/api/v3/simple/price",
+                params={"ids": coin_id, "vs_currencies": "usd"},
+                timeout=2,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                price = float(data.get(coin_id, {}).get("usd", 0.0))
+                if price > 0:
+                    return self._store(symbol, price)
         except Exception:
             pass
 
@@ -126,15 +227,24 @@ class MarketService:
         if heroku_price is not None:
             return heroku_price
 
+        # fast Yahoo quote endpoint
         try:
-            data = yf.Ticker(ticker).history(period="1d")
-            if not data.empty:
-                price = float(data["Close"].iloc[-1])
-                if price > 0:
-                    return self._store(ticker, price)
+            resp = self._session.get(
+                "https://query1.finance.yahoo.com/v7/finance/quote",
+                params={"symbols": ticker},
+                timeout=2,
+            )
+            if resp.status_code == 200:
+                payload = resp.json() or {}
+                result = (payload.get("quoteResponse") or {}).get("result") or []
+                if result:
+                    price = float(result[0].get("regularMarketPrice") or 0.0)
+                    if price > 0:
+                        return self._store(ticker, price)
         except Exception:
             pass
 
+        # Avoid yfinance here; it can hang or be blocked in some environments.
         return self._last_known.get(ticker, 0.0)
 
     def get_price(self, symbol: str, kind: str) -> float:
@@ -278,12 +388,22 @@ class MarketService:
         if not req_syms:
             return out
 
+        # First: pull prices from our Heroku relay (fast & reliable in this app).
+        heroku_prices = self._bulk_from_heroku(req_syms, "Crypto")
+        for s, p in heroku_prices.items():
+            fp = float(p)
+            self._note_observed_price(s, fp)
+            chg0 = self._change_cache.get(f"chg:Crypto:{s}", (None, 0.0))[0]
+            if chg0 is None:
+                chg0 = self._fallback_change_pct(s, fp)
+            out[s] = (fp, chg0)
+
         ids = []
         for s in req_syms:
             ids.append(COIN_MAP.get(s, s.lower()))
         ids_csv = ",".join(sorted(set(ids)))
 
-        # Fast path: direct CoinGecko HTTP with a strict timeout (pycoingecko can hang).
+        # Fast path: direct CoinGecko HTTP (price + 24h change) with a strict timeout.
         data = None
         try:
             url = "https://api.coingecko.com/api/v3/simple/price"
@@ -294,7 +414,7 @@ class MarketService:
                     "vs_currencies": "usd",
                     "include_24hr_change": "true",
                 },
-                timeout=4,
+                timeout=2,
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -304,7 +424,9 @@ class MarketService:
         if not data:
             # Fallback to per-symbol cached/last-known prices (instant).
             for s in req_syms:
-                out[s] = (float(self.get_crypto_price(s)), self.get_change_pct(s, "Crypto"))
+                chg = self._change_cache.get(f"chg:Crypto:{s}")
+                if s not in out:
+                    out[s] = (float(self.fast_price(s, "Crypto")), (chg[0] if chg else None))
             return out
 
         # map id -> original symbol(s)
@@ -326,14 +448,21 @@ class MarketService:
             if price > 0:
                 # store cached spot
                 for sym in id_to_syms.get(cid, []):
-                    self._store(sym, price)
+                    self._note_observed_price(sym, price)
+                    if chg is None:
+                        chg = self._fallback_change_pct(sym, price)
                     self._change_cache[f"chg:Crypto:{sym}"] = (chg, time.time())
                     out[sym] = (price, chg)
 
         # any missing ones: fallback
         for s in req_syms:
             if s not in out:
-                out[s] = (float(self.get_crypto_price(s)), self.get_change_pct(s, "Crypto"))
+                chg = self._change_cache.get(f"chg:Crypto:{s}")
+                fp = float(self.fast_price(s, "Crypto"))
+                chg0 = (chg[0] if chg else None)
+                if chg0 is None:
+                    chg0 = self._fallback_change_pct(s, fp)
+                out[s] = (fp, chg0)
         return out
 
     def get_stock_quotes(self, tickers: list[str]) -> dict[str, tuple[float, float | None]]:
@@ -346,10 +475,18 @@ class MarketService:
             return {}
 
         out: dict[str, tuple[float, float | None]] = {}
+        # First: pull prices from our Heroku relay so prices "move" even if Yahoo is blocked.
+        heroku_prices = self._bulk_from_heroku(syms, "Stock")
+        for s, p in heroku_prices.items():
+            fp = float(p)
+            chg0 = self._change_cache.get(f"chg:Stock:{s}", (None, 0.0))[0]
+            if chg0 is None:
+                chg0 = self._fallback_change_pct(s, fp)
+            out[s] = (fp, chg0)
         # Fast path: Yahoo quote endpoint (single request, no cookie/crumb dance).
         try:
             url = "https://query1.finance.yahoo.com/v7/finance/quote"
-            resp = self._session.get(url, params={"symbols": ",".join(syms)}, timeout=4)
+            resp = self._session.get(url, params={"symbols": ",".join(syms)}, timeout=2)
             if resp.status_code == 200:
                 payload = resp.json() or {}
                 results = (payload.get("quoteResponse") or {}).get("result") or []
@@ -369,50 +506,22 @@ class MarketService:
                         chg_f = None
                     if price_f > 0:
                         self._store(sym, price_f)
+                        if chg_f is None:
+                            chg_f = self._fallback_change_pct(sym, price_f)
                         self._change_cache[f"chg:Stock:{sym}"] = (chg_f, time.time())
                         out[sym] = (price_f, chg_f)
         except Exception:
             pass
 
-        # Fallback for any missing symbols: yfinance bulk download (slower).
-        missing = [s for s in syms if s not in out]
-        if missing:
-            try:
-                df = yf.download(
-                    tickers=" ".join(missing),
-                    period="2d",
-                    interval="1d",
-                    group_by="ticker",
-                    threads=True,
-                    progress=False,
-                )
-            except Exception:
-                df = None
-
-            if df is None or getattr(df, "empty", True):
-                for s in missing:
-                    out[s] = (float(self.get_stock_price(s)), self.get_change_pct(s, "Stock"))
-                return out
-
-            multi = getattr(df, "columns", None)
-            is_multi = hasattr(multi, "levels") and len(getattr(multi, "levels", [])) >= 2
-            for s in missing:
-                try:
-                    closes = df[(s, "Close")].dropna().values if is_multi else df["Close"].dropna().values
-                    if len(closes) == 0:
-                        raise ValueError("no closes")
-                    last = float(closes[-1])
-                    prev = float(closes[-2]) if len(closes) >= 2 else last
-                    chg2 = None if prev == 0 else ((last - prev) / prev) * 100.0
-                    if last > 0:
-                        self._store(s, last)
-                        self._change_cache[f"chg:Stock:{s}"] = (chg2, time.time())
-                        out[s] = (last, chg2)
-                    else:
-                        raise ValueError("bad close")
-                except Exception:
-                    out[s] = (float(self.get_stock_price(s)), self.get_change_pct(s, "Stock"))
-
+        # Fallback for any missing symbols: never-blocking cached/last-known.
+        for s in syms:
+            if s not in out:
+                chg = self._change_cache.get(f"chg:Stock:{s}")
+                fp = float(self.fast_price(s, "Stock"))
+                chg0 = (chg[0] if chg else None)
+                if chg0 is None:
+                    chg0 = self._fallback_change_pct(s, fp)
+                out[s] = (fp, chg0)
         return out
 
     def _get_stock_change_pct(self, ticker: str) -> float | None:
