@@ -39,13 +39,13 @@ class StubBackend:
         for a in self._assets:
             symbol = a.symbol.upper()
 
-            try:
-                if a.kind == AssetKind.CRYPTO:
-                    price = self.market.get_crypto_price(symbol.lower())
-                elif a.kind == AssetKind.STOCK:
-                    price = self.market.get_stock_price(symbol)
-                else:
-                     price = 1.0
+        try:
+            if a.kind == AssetKind.CRYPTO:
+                price = self.market.get_crypto_price(symbol.lower())
+            elif a.kind == AssetKind.STOCK:
+                 price = self.market.get_stock_price(symbol)
+            else:
+                price = 1.0
         except Exception:
             price = 0.0
 
