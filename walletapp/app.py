@@ -5,6 +5,7 @@ from typing import Any
 
 from kivy.app import App
 from kivy.core.text import LabelBase
+from kivy.graphics.texture import Texture
 from kivy.core.window import Window
 from kivy.lang import Builder
 from kivy.uix.screenmanager import ScreenManager, SlideTransition
@@ -15,6 +16,7 @@ from walletapp.screens.asset_entry_screen import AssetEntryScreen
 from walletapp.screens.main_screen import MainScreen
 from walletapp.screens.settings_screen import SettingsSecurityScreen
 from walletapp.screens.tx_preview_screen import TransactionPreviewScreen
+from walletapp.widgets.line_chart import LineChart  # noqa: F401
 from walletapp.widgets.pie_chart import PieChart  # noqa: F401
 
 
@@ -60,6 +62,33 @@ class PersonalWalletApp(App):
             db_path = os.path.join(self.user_data_dir, "wallet.db")
             self.backend = SecureWalletBackend(db_path)
         self.state: dict[str, Any] = {}
+        self.btn_gloss_tex = self._make_gloss_texture(max_alpha=0.22)
+        self.btn_gloss_tex_subtle = self._make_gloss_texture(max_alpha=0.14)
+        self.btn_gloss_tex_icon = self._make_gloss_texture(max_alpha=0.16)
+
+    def _make_gloss_texture(self, *, max_alpha: float) -> Texture:
+        """
+        1x256 vertical alpha gradient texture for smooth button highlight.
+        Using a texture avoids visible banding from stacked rectangles.
+        """
+        w, h = 1, 256
+        tex = Texture.create(size=(w, h), colorfmt="rgba")
+        tex.wrap = "clamp_to_edge"
+        tex.mag_filter = "linear"
+        tex.min_filter = "linear"
+
+        # Top-heavy gloss: strong at the very top, fades smoothly to 0.
+        buf = bytearray()
+        for y in range(h):
+            t = y / float(h - 1)  # 0 bottom -> 1 top (we'll invert)
+            x = 1.0 - t
+            # Ease-out curve + extra top bias
+            a = max_alpha * (x * x) * (0.85 + 0.15 * x)
+            alpha = int(max(0.0, min(1.0, a)) * 255)
+            buf.extend([255, 255, 255, alpha])
+        tex.blit_buffer(bytes(buf), colorfmt="rgba", bufferfmt="ubyte")
+        tex.flip_vertical()
+        return tex
 
     def on_start(self) -> None:
         b = self.backend

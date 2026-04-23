@@ -5,6 +5,8 @@ from collections import defaultdict
 
 from kivy.clock import Clock
 from kivy.properties import BooleanProperty, ListProperty, StringProperty
+from kivy.uix.button import Button
+from kivy.factory import Factory
 
 from walletapp.screens.base import WalletScreen
 from walletapp.services.market_service import MarketService
@@ -20,6 +22,15 @@ class MainScreen(WalletScreen):
     vault_strip_color = ListProperty([0.45, 0.55, 0.65, 1.0])
     is_fetching       = BooleanProperty(False)  # KV binds to this for the indicator
     _loaded           = BooleanProperty(False)  # True after first successful load
+
+    selected_symbol = StringProperty("")
+    selected_range = StringProperty("Week")  # Day|Week|Month|Year|All
+    chart_points = ListProperty([])  # list[float]
+    chart_color = ListProperty([0.95, 0.80, 0.20, 1.0])
+    chart_value_label = StringProperty("")
+
+    _history_cache: dict[tuple[str, str], list[float]] = {}
+    _kind_by_symbol: dict[str, str] = {}
 
     def on_pre_enter(self, *args) -> None:
         app = self.manager.app  # type: ignore[attr-defined]
@@ -56,12 +67,59 @@ class MainScreen(WalletScreen):
             daemon=True
         ).start()
 
+    def select_asset(self, symbol: str) -> None:
+        self.selected_symbol = (symbol or "").strip().upper()
+        chips = self.ids.get("asset_chips")
+        if chips:
+            try:
+                for child in chips.children:
+                    if hasattr(child, "selected"):
+                        child.selected = (getattr(child, "text", "").upper() == self.selected_symbol)
+            except Exception:
+                pass
+        self._refresh_chart()
+
+    def select_range(self, label: str) -> None:
+        self.selected_range = (label or "Week").strip().title()
+        self._refresh_chart()
+
+    def _refresh_chart(self) -> None:
+        sym = (self.selected_symbol or "").strip().upper()
+        rng = (self.selected_range or "Week").strip().title()
+        if not sym:
+            self.chart_points = []
+            self.chart_value_label = ""
+            return
+
+        key = (sym, rng)
+        if key not in self._history_cache:
+            market = MarketService()
+            kind = self._kind_by_symbol.get(sym, "Crypto")
+            self._history_cache[key] = market.get_history(sym, kind, rng)
+        pts = list(self._history_cache[key])
+        self.chart_points = pts
+        if pts:
+            self.chart_value_label = f"{sym} • ${pts[-1]:,.2f}"
+
+    def on_chart_hover(self, value: float) -> None:
+        sym = (self.selected_symbol or "").strip().upper()
+        if not sym:
+            return
+        try:
+            v = float(value)
+        except Exception:
+            return
+        if v > 0:
+            self.chart_value_label = f"{sym} • ${v:,.2f}"
+
     def _fetch_prices(self, app) -> None:
         """Runs on a background thread — never touch UI widgets here."""
         try:
             total  = app.backend.get_portfolio_total_usd()
             assets = app.backend.list_assets()
             market = MarketService()
+
+            self._kind_by_symbol = {a.symbol.upper(): a.kind.value for a in assets}
 
             rows = []
             for a in assets:
@@ -127,6 +185,43 @@ class MainScreen(WalletScreen):
             chart.values = chart_values
         if legend:
             legend.text = "\n".join(legend_lines) if legend_lines else "No assets"
+
+        chips = self.ids.get("asset_chips")
+        if chips:
+            try:
+                chips.clear_widgets()
+                symbols: list[str] = []
+                for row in rows:
+                    sym = str(row.get("text", "")).strip().split()[0].upper() if row else ""
+                    if sym:
+                        symbols.append(sym)
+                symbols = list(dict.fromkeys(symbols))
+
+                if not self.selected_symbol and symbols:
+                    self.selected_symbol = symbols[0]
+
+                palette = {
+                    "ETH":  [0.22, 0.45, 0.95, 1.0],
+                    "BTC":  [0.98, 0.60, 0.10, 1.0],
+                    "USDC": [0.25, 0.80, 0.65, 1.0],
+                    "AAPL": [0.95, 0.75, 0.30, 1.0],
+                }
+                for sym in symbols[:8]:
+                    btn = Factory.AssetChip(text=sym)
+                    btn.chip_color = palette.get(sym, [0.55, 0.65, 0.95, 1.0])
+                    btn.selected = sym == (self.selected_symbol or "").upper()
+                    btn.bind(on_release=lambda _btn, s=sym: self.select_asset(s))
+                    chips.add_widget(btn)
+            except Exception:
+                pass
+
+        self.chart_color = {
+            "ETH":  [0.22, 0.45, 0.95, 1.0],
+            "BTC":  [0.98, 0.60, 0.10, 1.0],
+            "USDC": [0.25, 0.80, 0.65, 1.0],
+            "AAPL": [0.95, 0.75, 0.30, 1.0],
+        }.get((self.selected_symbol or "").upper(), [0.95, 0.80, 0.20, 1.0])
+        self._refresh_chart()
 
     def _build_system_status(self, b, assets: list, total: float) -> str:
         lines: list[str] = ["[b]Status[/b]", ""]

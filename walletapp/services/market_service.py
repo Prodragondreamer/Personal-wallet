@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 import time
 import requests
 
@@ -21,6 +22,7 @@ COIN_MAP: dict[str, str] = {
 
 # cache duration in seconds avoids hammering the API on every screen refresh
 _CACHE_TTL = 60
+_HISTORY_CACHE_TTL = 300
 
 
 class MarketService:
@@ -28,6 +30,7 @@ class MarketService:
     def __init__(self) -> None:
         self.cg = CoinGeckoAPI()
         self._cache: dict[str, tuple[float, float]] = {}
+        self._history_cache: dict[str, tuple[list[float], float]] = {}
         # last known prices used as fallback when everything is unreachable
         self._last_known: dict[str, float] = {
             "ETH":  3000.00,
@@ -139,3 +142,93 @@ class MarketService:
         if kind == "Crypto" or symbol in COIN_MAP:
             return self.get_crypto_price(symbol)
         return self.get_stock_price(symbol)
+
+    def get_history(self, symbol: str, kind: str, range_label: str) -> list[float]:
+        """
+        Historical USD prices suitable for spark/line charts.
+
+        - Crypto: CoinGecko market chart
+        - Stock: Yahoo Finance history
+        - Stablecoins / Cash: flat line at $1.00
+        """
+        symbol = (symbol or "").upper().strip()
+        kind = (kind or "").strip().title()
+        range_label = (range_label or "Week").strip().title()
+
+        if not symbol:
+            return []
+        if kind == "Cash" or symbol in ("USDC", "USDT", "DAI"):
+            n = {"Day": 24, "Week": 30, "Month": 60, "Year": 120, "All": 180}.get(range_label, 30)
+            return [1.0 for _ in range(max(12, int(n)))]
+
+        cache_key = f"hist:{kind}:{symbol}:{range_label}"
+        cached = self._history_cache.get(cache_key)
+        if cached is not None:
+            data, ts = cached
+            if time.time() - ts < _HISTORY_CACHE_TTL:
+                return list(data)
+
+        out: list[float] = []
+        if kind == "Crypto" or symbol in COIN_MAP:
+            out = self._get_crypto_history(symbol, range_label)
+        else:
+            out = self._get_stock_history(symbol, range_label)
+
+        if not out:
+            # Fallback: at least return something reasonable (current spot)
+            spot = float(self.get_price(symbol, kind))
+            out = [spot for _ in range(24)]
+
+        self._history_cache[cache_key] = (list(out), time.time())
+        return list(out)
+
+    def _get_crypto_history(self, symbol: str, range_label: str) -> list[float]:
+        coin_id = COIN_MAP.get(symbol, symbol.lower())
+        days: int | str
+        if range_label == "Day":
+            days = 1
+        elif range_label == "Week":
+            days = 7
+        elif range_label == "Month":
+            days = 30
+        elif range_label == "Year":
+            days = 365
+        else:
+            days = "max"
+
+        try:
+            data = self.cg.get_coin_market_chart_by_id(id=coin_id, vs_currency="usd", days=days)
+            prices: Iterable[list[float]] = data.get("prices", []) or []
+            out = [float(p[1]) for p in prices if p and len(p) >= 2]
+            # Downsample a bit for smoother UI
+            if len(out) > 240:
+                step = max(1, len(out) // 180)
+                out = out[::step]
+            return out
+        except Exception:
+            return []
+
+    def _get_stock_history(self, ticker: str, range_label: str) -> list[float]:
+        period, interval = ("5d", "1h")
+        if range_label == "Day":
+            period, interval = ("1d", "1h")
+        elif range_label == "Week":
+            period, interval = ("5d", "1h")
+        elif range_label == "Month":
+            period, interval = ("1mo", "1d")
+        elif range_label == "Year":
+            period, interval = ("1y", "1wk")
+        elif range_label == "All":
+            period, interval = ("max", "1mo")
+
+        try:
+            data = yf.Ticker(ticker).history(period=period, interval=interval)
+            if data is None or getattr(data, "empty", True):
+                return []
+            closes = data.get("Close")
+            if closes is None:
+                return []
+            out = [float(v) for v in closes.values if v == v]  # drop NaN
+            return out
+        except Exception:
+            return []
