@@ -45,11 +45,11 @@ class MarketsScreen(WalletScreen):
         # Always show instant (non-network) prices immediately, then replace with live.
         market = self._market or MarketService()
         self.crypto_rows = [
-            {"symbol": s, "price": f"${market.fast_price(s, 'Crypto'):,.2f}", "change": "…", "change_color": (0.72, 0.74, 0.80, 1)}
+            self._row(s, float(market.fast_price(s, "Crypto")), market.last_change_pct(s, "Crypto"))
             for s in self._top_cryptos
         ]
         self.stock_rows = [
-            {"symbol": s, "price": f"${market.fast_price(s, 'Stock'):,.2f}", "change": "…", "change_color": (0.72, 0.74, 0.80, 1)}
+            self._row(s, float(market.fast_price(s, "Stock")), market.last_change_pct(s, "Stock"))
             for s in self._top_stocks
         ]
         threading.Thread(target=self._fetch, daemon=True).start()
@@ -94,9 +94,13 @@ class MarketsScreen(WalletScreen):
         self.is_fetching = False
 
     def _row(self, symbol: str, price: float, change_pct: float | None) -> dict:
-        change_str = "—" if change_pct is None else f"{change_pct:+.2f}%"
-        is_pos = (change_pct or 0.0) >= 0.0
-        color = (0.60, 0.90, 0.60, 1) if is_pos else (0.95, 0.35, 0.35, 1)
+        if change_pct is None:
+            change_str = "0.00%"
+            color = (0.72, 0.74, 0.80, 1)
+        else:
+            change_str = f"{change_pct:+.2f}%"
+            is_pos = change_pct >= 0.0
+            color = (0.60, 0.90, 0.60, 1) if is_pos else (0.95, 0.35, 0.35, 1)
         return {
             "symbol": symbol,
             "price": f"${price:,.2f}",

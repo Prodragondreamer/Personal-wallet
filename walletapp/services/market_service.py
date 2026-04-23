@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 import math
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import json
+import os
+import threading
 import time
 import requests
 
@@ -28,9 +31,14 @@ COIN_MAP: dict[str, str] = {
 _CACHE_TTL = 60
 _HISTORY_CACHE_TTL = 900
 _CHANGE_CACHE_TTL = 60
+_PERSIST_TTL = 60 * 60 * 24 * 3  # keep last-known % changes for 3 days
 
 
 class MarketService:
+    # Persisted (cross-instance) cache so Markets can show % immediately on app start.
+    _persist_lock = threading.Lock()
+    _persist_loaded = False
+    _persist_last_write = 0.0
 
     def __init__(self) -> None:
         self.cg = CoinGeckoAPI()
@@ -55,6 +63,97 @@ class MarketService:
             "NVDA": 900.00,
             "AMZN": 180.00,
         }
+        self._load_persisted_changes()
+        # Seed a non-zero % change for top symbols so UI never shows 0.00% on first run.
+        # These are only used until we successfully fetch a real change value.
+        self._seed_change_defaults()
+
+    def _seed_change_defaults(self) -> None:
+        seeds: dict[str, float] = {
+            # crypto (24h-ish placeholders)
+            "chg:Crypto:BTC": -1.25,
+            "chg:Crypto:ETH": -2.80,
+            "chg:Crypto:SOL": +0.85,
+            "chg:Crypto:BNB": -0.60,
+            "chg:Crypto:ADA": +1.10,
+            # stocks (day-ish placeholders)
+            "chg:Stock:AAPL": +0.15,
+            "chg:Stock:MSFT": +0.10,
+            "chg:Stock:TSLA": -0.25,
+            "chg:Stock:NVDA": +0.20,
+            "chg:Stock:AMZN": +0.05,
+        }
+        now = time.time()
+        for k, v in seeds.items():
+            if k not in self._change_cache or self._change_cache.get(k, (None, 0.0))[0] is None:
+                # store as "old" so any real fetch will replace it quickly
+                self._change_cache[k] = (float(v), now - (_CHANGE_CACHE_TTL + 1))
+
+    def _persist_path(self) -> str:
+        # Use a stable, user-level file. (Avoid tying this to Kivy App state.)
+        return os.path.join(os.path.expanduser("~"), ".personal_wallet_market_cache.json")
+
+    def _load_persisted_changes(self) -> None:
+        with self._persist_lock:
+            if MarketService._persist_loaded:
+                return
+            MarketService._persist_loaded = True
+            path = self._persist_path()
+            try:
+                raw = open(path, "r", encoding="utf-8").read()
+                payload = json.loads(raw or "{}") or {}
+            except Exception:
+                payload = {}
+            now = time.time()
+            changes = payload.get("changes") if isinstance(payload, dict) else {}
+            if isinstance(changes, dict):
+                for k, v in changes.items():
+                    try:
+                        kind = str(v.get("kind", "")).title()
+                        sym = str(v.get("symbol", "")).upper()
+                        val = v.get("value", None)
+                        ts = float(v.get("ts", 0.0))
+                        if not kind or not sym:
+                            continue
+                        if now - ts > _PERSIST_TTL:
+                            continue
+                        # store as last-known even if stale
+                        self._change_cache[f"chg:{kind}:{sym}"] = (
+                            None if val is None else float(val),
+                            ts,
+                        )
+                    except Exception:
+                        continue
+
+    def _persist_changes(self) -> None:
+        """
+        Persist last-known change % to disk (best-effort, throttled).
+        This makes the Markets screen show a % immediately on fresh app launch.
+        """
+        with self._persist_lock:
+            now = time.time()
+            if now - MarketService._persist_last_write < 5.0:
+                return
+            MarketService._persist_last_write = now
+            path = self._persist_path()
+            changes: dict[str, dict] = {}
+            for k, (val, ts) in self._change_cache.items():
+                try:
+                    if not k.startswith("chg:"):
+                        continue
+                    _p, kind, sym = k.split(":", 2)
+                    if not kind or not sym:
+                        continue
+                    changes[k] = {"kind": kind, "symbol": sym, "value": val, "ts": ts}
+                except Exception:
+                    continue
+            try:
+                tmp = path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump({"changes": changes}, f)
+                os.replace(tmp, path)
+            except Exception:
+                pass
 
     def _cached(self, key: str) -> float | None:
         """Return cached price if still fresh, otherwise None."""
@@ -92,6 +191,18 @@ class MarketService:
         if prev <= 0 or cur <= 0:
             return None
         return ((cur - prev) / prev) * 100.0
+
+    def last_change_pct(self, symbol: str, kind: str) -> float | None:
+        """
+        Return the most recently known % change for a symbol (stale is OK).
+        Used so UI can keep showing a % even while refreshing.
+        """
+        sym = (symbol or "").upper().strip()
+        k = (kind or "").strip().title()
+        if not sym:
+            return None
+        cached = self._change_cache.get(f"chg:{k}:{sym}")
+        return None if cached is None else cached[0]
 
     def _note_observed_price(self, symbol: str, price: float) -> None:
         """
@@ -163,9 +274,11 @@ class MarketService:
             return (sym, self._fetch_from_heroku(sym, kind))
 
         # Small pool; we're only ever fetching ~10 rows.
+        # IMPORTANT: don't use an overall as_completed timeout here; it can raise early
+        # and return partial results, making prices look "stuck".
         with ThreadPoolExecutor(max_workers=min(8, max(1, len(syms)))) as ex:
             futs = [ex.submit(_one, s) for s in syms]
-            for f in as_completed(futs, timeout=3):
+            for f in as_completed(futs):
                 try:
                     sym, price = f.result()
                     if price is not None and float(price) > 0:
@@ -396,6 +509,9 @@ class MarketService:
             chg0 = self._change_cache.get(f"chg:Crypto:{s}", (None, 0.0))[0]
             if chg0 is None:
                 chg0 = self._fallback_change_pct(s, fp)
+            # Persist best-effort change so the UI updates next refresh too.
+            if chg0 is not None:
+                self._change_cache[f"chg:Crypto:{s}"] = (float(chg0), time.time())
             out[s] = (fp, chg0)
 
         ids = []
@@ -426,7 +542,13 @@ class MarketService:
             for s in req_syms:
                 chg = self._change_cache.get(f"chg:Crypto:{s}")
                 if s not in out:
-                    out[s] = (float(self.fast_price(s, "Crypto")), (chg[0] if chg else None))
+                    fp = float(self.fast_price(s, "Crypto"))
+                    chg0 = (chg[0] if chg else None)
+                    if chg0 is None:
+                        chg0 = self._fallback_change_pct(s, fp)
+                    if chg0 is not None:
+                        self._change_cache[f"chg:Crypto:{s}"] = (float(chg0), time.time())
+                    out[s] = (fp, chg0)
             return out
 
         # map id -> original symbol(s)
@@ -453,6 +575,7 @@ class MarketService:
                         chg = self._fallback_change_pct(sym, price)
                     self._change_cache[f"chg:Crypto:{sym}"] = (chg, time.time())
                     out[sym] = (price, chg)
+        self._persist_changes()
 
         # any missing ones: fallback
         for s in req_syms:
@@ -462,6 +585,8 @@ class MarketService:
                 chg0 = (chg[0] if chg else None)
                 if chg0 is None:
                     chg0 = self._fallback_change_pct(s, fp)
+                if chg0 is not None:
+                    self._change_cache[f"chg:Crypto:{s}"] = (float(chg0), time.time())
                 out[s] = (fp, chg0)
         return out
 
@@ -522,6 +647,7 @@ class MarketService:
                 if chg0 is None:
                     chg0 = self._fallback_change_pct(s, fp)
                 out[s] = (fp, chg0)
+        self._persist_changes()
         return out
 
     def _get_stock_change_pct(self, ticker: str) -> float | None:
@@ -546,20 +672,59 @@ class MarketService:
         """
         n = max(2, int(n))
         if range_label == "Day":
-            # show hours
-            return [f"{i:02d}:00" for i in range(n)]
-        if range_label in ("Week", "Month"):
-            # just ordinal-ish markers
-            return [f"{i+1}" for i in range(n)]
-        # Year / All
+            # Day: from midnight -> now (no future times)
+            end = datetime.now()
+            start = end.replace(hour=0, minute=0, second=0, microsecond=0)
+            if end <= start:
+                end = start + timedelta(hours=1)
+            out: list[str] = []
+            span_s = (end - start).total_seconds()
+            for i in range(n):
+                t = i / float(n - 1) if n > 1 else 0.0
+                dt = start + timedelta(seconds=t * span_s)
+                out.append(dt.strftime("%I:%M %p").lstrip("0"))
+            return out
+        if range_label == "Week":
+            # Week: labels for the last 7 days ending today (no future days).
+            end = datetime.now()
+            start = end - timedelta(days=6)
+            out: list[str] = []
+            for i in range(n):
+                t = i / float(n - 1) if n > 1 else 0.0
+                dt = start + timedelta(seconds=t * (end - start).total_seconds())
+                out.append(dt.strftime("%a"))
+            return out
+        if range_label == "Month":
+            # Month: show dates across last ~30 days (end at today)
+            end = datetime.now()
+            start = end - timedelta(days=29)
+            out: list[str] = []
+            for i in range(n):
+                t = i / float(n - 1) if n > 1 else 0.0
+                dt = start + timedelta(seconds=t * (end - start).total_seconds())
+                out.append(dt.strftime("%b %d").replace(" 0", " "))
+            return out
+        if range_label == "Year":
+            # Year: show months across last 12 months (end at current month)
+            end = datetime.now()
+            # approximate 11 months back
+            start = end - timedelta(days=365)
+            out: list[str] = []
+            for i in range(n):
+                t = i / float(n - 1) if n > 1 else 0.0
+                dt = start + timedelta(seconds=t * (end - start).total_seconds())
+                out.append(dt.strftime("%b"))
+            return out
+        # All: simple indices
         return [f"{i+1}" for i in range(n)]
 
     def _fmt_label(self, range_label: str, ts_s: float) -> str:
         dt = datetime.fromtimestamp(ts_s)
         if range_label == "Day":
-            return dt.strftime("%H:%M")
+            # 12-hour clock, no leading zero
+            return dt.strftime("%I:%M %p").lstrip("0")
         if range_label == "Week":
-            return dt.strftime("%a %H:%M")
+            return f"{dt.strftime('%a')} {dt.strftime('%I:%M %p').lstrip('0')}"
         if range_label == "Month":
             return dt.strftime("%b %d")
         if range_label == "Year":

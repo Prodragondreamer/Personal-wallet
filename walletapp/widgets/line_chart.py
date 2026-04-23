@@ -5,6 +5,7 @@ from kivy.graphics import Color, Line, Mesh, RoundedRectangle, Rectangle
 from kivy.metrics import dp
 from kivy.properties import BooleanProperty, ListProperty, NumericProperty, StringProperty
 from kivy.uix.widget import Widget
+import re
 
 
 class LineChart(Widget):
@@ -140,18 +141,52 @@ class LineChart(Widget):
             Color(r, g, b, a)
             Line(points=xy, width=1.6)
 
-            # X-axis labels (start / mid / end)
-            labels = list(self.labels_x or [])
-            if len(labels) >= 3:
-                for j, idx in enumerate([0, len(labels) // 2, len(labels) - 1]):
-                    txt = labels[idx]
+            # X-axis labels (start / mid / end). Show at least start/end.
+            labels = [str(s) for s in (self.labels_x or [])]
+            if len(labels) >= 2:
+                wdays = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}
+                sample = next((s for s in labels if (s or "").strip()), "")
+                first_token = (sample.split(" ")[0] if sample else "").strip()
+
+                looks_week = first_token in wdays
+                looks_day = bool(re.search(r"\\d{1,2}:\\d{2}\\s?(AM|PM)", sample))
+                looks_month = bool(re.match(r"^[A-Za-z]{3}\\s+\\d{1,2}$", sample.strip()))
+                looks_year = bool(re.match(r"^[A-Za-z]{3}$", sample.strip()))
+
+                if looks_week and len(labels) >= 7:
+                    # 7 ticks Mon..Sun
+                    idxs = [int(round((k / 6.0) * (len(labels) - 1))) for k in range(7)]
+                elif looks_year and len(labels) >= 12:
+                    # 12 ticks Jan..Dec across the series
+                    idxs = [int(round((k / 11.0) * (len(labels) - 1))) for k in range(12)]
+                elif looks_day:
+                    # 5 ticks across the day
+                    idxs = [int(round((k / 4.0) * (len(labels) - 1))) for k in range(5)]
+                elif looks_month:
+                    # 5 ticks across the month
+                    idxs = [int(round((k / 4.0) * (len(labels) - 1))) for k in range(5)]
+                else:
+                    idxs = [0, len(labels) - 1] if len(labels) == 2 else [0, len(labels) // 2, len(labels) - 1]
+                for j, idx in enumerate(idxs):
+                    raw_txt = (labels[idx] or "").strip()
+                    if looks_week:
+                        # For week-like labels, only show day.
+                        txt = raw_txt.split(" ")[0]
+                    else:
+                        txt = raw_txt
+                    if not txt:
+                        continue
                     lab = CoreLabel(text=txt, font_size=dp(10), color=(0.72, 0.74, 0.80, 1))
                     lab.refresh()
                     tw, th = lab.texture.size
                     if j == 0:
                         lx = left
-                    elif j == 1:
+                    elif j == 1 and len(idxs) == 3:
                         lx = (left + right) / 2 - (tw / 2)
+                    elif len(idxs) > 3:
+                        # distribute ticks evenly
+                        t = j / float(max(1, len(idxs) - 1))
+                        lx = left + t * (right - left) - (tw / 2)
                     else:
                         lx = right - tw
                     ly = self.y + dp(2)

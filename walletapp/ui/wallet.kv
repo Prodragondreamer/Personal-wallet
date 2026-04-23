@@ -489,13 +489,9 @@
                             halign: "left"
                             valign: "middle"
                             text_size: self.size
-                        FluidSpinner:
-                            size_hint: None, None
-                            width: "92dp"
-                            height: "40dp"
-                            text: root.selected_zoom
-                            values: root.zoom_values
-                            on_text: root.set_zoom(self.text)
+                        Widget:
+                            size_hint_x: None
+                            width: 0
 
                     ScrollView:
                         size_hint_y: None

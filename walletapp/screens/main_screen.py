@@ -13,6 +13,7 @@ from kivy.factory import Factory
 from walletapp.screens.base import WalletScreen
 from walletapp.services.market_service import MarketService
 from walletapp.services.secure_backend import SecureWalletBackend
+from walletapp.services.market_service import COIN_MAP
 
 
 class MainScreen(WalletScreen):
@@ -153,6 +154,62 @@ class MainScreen(WalletScreen):
         except Exception:
             return None
 
+    def _zoom_window_minutes(self) -> int | None:
+        """
+        How much recent time to display for the current range/zoom.
+        Smaller zoom interval => shorter window => chart looks "zoomed in".
+        """
+        rng = (self.selected_range or "Week").strip().title()
+        z = (self.selected_zoom or "").strip()
+        windows: dict[str, dict[str, int]] = {
+            "Day": {
+                "30m": 24 * 60,
+                "20m": 12 * 60,
+                "15m": 8 * 60,
+                "10m": 6 * 60,
+                "5m": 3 * 60,
+                "1m": 60,
+            },
+            "Week": {
+                "4h": 7 * 24 * 60,
+                "2h": 3 * 24 * 60,
+                "1h": 2 * 24 * 60,
+                "30m": 24 * 60,
+                "15m": 12 * 60,
+            },
+            "Month": {
+                "1d": 30 * 24 * 60,
+                "12h": 14 * 24 * 60,
+                "6h": 7 * 24 * 60,
+                "1h": 2 * 24 * 60,
+            },
+            "Year": {
+                "1wk": 365 * 24 * 60,
+                "1d": 90 * 24 * 60,
+            },
+            "All": {
+                "3mo": 5 * 365 * 24 * 60,
+                "1mo": 2 * 365 * 24 * 60,
+            },
+        }
+        return windows.get(rng, {}).get(z, None)
+
+    def _apply_zoom_window(self, labels: list[str], pts: list[float]) -> tuple[list[str], list[float]]:
+        """
+        Slice to most recent window to create a visual zoom effect.
+        """
+        if len(pts) < 2:
+            return (labels, pts)
+        zoom_min = self._zoom_minutes()
+        window_min = self._zoom_window_minutes()
+        if not zoom_min or not window_min or zoom_min <= 0:
+            return (labels, pts)
+        want = int(window_min // zoom_min)
+        want = max(12, min(len(pts), want))
+        if len(pts) <= want:
+            return (labels, pts)
+        return (list(labels[-want:]), list(pts[-want:]))
+
     def _refresh_chart(self) -> None:
         sym = (self.selected_symbol or "").strip().upper()
         rng = (self.selected_range or "Week").strip().title()
@@ -175,12 +232,21 @@ class MainScreen(WalletScreen):
 
         # Don’t block the UI thread waiting on network. Fetch in background.
         market = self._market or MarketService()
-        kind = self._kind_by_symbol.get(sym, "Crypto")
+        # Kind map is populated async; fall back to symbol heuristics so stocks like AAPL
+        # don't get routed through the crypto history path.
+        kind = self._kind_by_symbol.get(sym)
+        if not kind:
+            kind = "Crypto" if sym in COIN_MAP else "Stock"
         # Instant non-flat placeholder curve so UI never looks stuck.
         spot = float(market.get_price(sym, kind))
         instant = self._instant_series(sym, rng, spot=spot)
-        self.chart_labels = ["" for _ in range(len(instant))]
-        self.chart_points = list(instant)
+        try:
+            inst_labels = list(market._make_time_labels(rng, len(instant)))  # type: ignore[attr-defined]
+        except Exception:
+            inst_labels = ["" for _ in range(len(instant))]
+        inst_labels, inst_pts = self._apply_zoom_window(inst_labels, list(instant))
+        self.chart_labels = list(inst_labels)
+        self.chart_points = list(inst_pts)
         self.chart_value_label = f"{sym} • ${instant[-1]:,.2f}"
         if key in self._history_inflight:
             return
@@ -191,7 +257,9 @@ class MainScreen(WalletScreen):
             pts: list[float] = []
             try:
                 market2 = self._market or MarketService()
-                kind2 = self._kind_by_symbol.get(sym, "Crypto")
+                kind2 = self._kind_by_symbol.get(sym)
+                if not kind2:
+                    kind2 = "Crypto" if sym in COIN_MAP else "Stock"
                 labels, pts = market2.get_history_series(sym, kind2, rng, interval_minutes=zoom_min)
             except Exception:
                 labels, pts = ([], [])
@@ -199,16 +267,18 @@ class MainScreen(WalletScreen):
             def _apply(_dt: float) -> None:
                 self._history_inflight.discard(key)
                 if len(pts) >= 2:
-                    self._history_cache[key] = (list(labels), list(pts))
+                    zl, zp = self._apply_zoom_window(list(labels), list(pts))
+                    self._history_cache[key] = (list(zl), list(zp))
                 # Only apply if user is still on same selection.
                 if (self.selected_symbol or "").strip().upper() != sym:
                     return
                 if (self.selected_range or "Week").strip().title() != rng:
                     return
                 if len(pts) >= 2:
-                    self.chart_labels = list(labels)
-                    self.chart_points = list(pts)
-                    self.chart_value_label = f"{sym} • ${pts[-1]:,.2f}"
+                    zl, zp = self._apply_zoom_window(list(labels), list(pts))
+                    self.chart_labels = list(zl)
+                    self.chart_points = list(zp)
+                    self.chart_value_label = f"{sym} • ${zp[-1]:,.2f}"
 
             Clock.schedule_once(_apply)
 
@@ -251,7 +321,9 @@ class MainScreen(WalletScreen):
 
         def _job() -> None:
             for sym in symbols[:4]:
-                kind = self._kind_by_symbol.get(sym, "Crypto")
+                kind = self._kind_by_symbol.get(sym)
+                if not kind:
+                    kind = "Crypto" if sym in COIN_MAP else "Stock"
                 for rng in ranges[:2]:
                     k = (sym, rng, zoom_key)
                     if k in self._preload_started or k in self._history_cache:
