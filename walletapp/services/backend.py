@@ -34,16 +34,16 @@ class StubBackend:
         return list(self._assets)
 
     def get_portfolio_total_usd(self) -> float:
-        total = 0.0
+    total = 0.0
 
-        for a in self._assets:
-            symbol = a.symbol.upper()
+    for a in self._assets:
+        symbol = a.symbol.upper()
 
         try:
             if a.kind == AssetKind.CRYPTO:
                 price = self.market.get_crypto_price(symbol.lower())
             elif a.kind == AssetKind.STOCK:
-                 price = self.market.get_stock_price(symbol)
+                price = self.market.get_stock_price(symbol)
             else:
                 price = 1.0
         except Exception:
@@ -53,14 +53,14 @@ class StubBackend:
 
     return total
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
-        est_fee = 1.25
-        total = float(draft.amount) + est_fee
+    est_fee = 1.25
+    total = float(draft.amount) + est_fee
 
-        return TransactionPreview(
-            draft=draft,
-            network="Testnet",
-            est_fee=est_fee,
-            total=total
+    return TransactionPreview(
+        draft=draft,
+        network="Testnet",
+        est_fee=est_fee,
+        total=total
     )
 
     def send_transaction(self, preview: TransactionPreview) -> SendResult:
