@@ -54,8 +54,9 @@ class StubBackend:
     return total
 
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
+        price = self.market.get_crypto_price(draft.symbol.lower())
         est_fee = 1.25
-        total   = draft.amount + est_fee
+        total = (draft.amount * price) + est_fee
         return TransactionPreview(
             draft=draft, network="Testnet", est_fee=est_fee, total=total
         )
