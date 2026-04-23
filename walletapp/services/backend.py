@@ -37,12 +37,18 @@ class StubBackend:
         total = 0.0
         for a in self._assets:
             symbol = a.symbol.upper()
-            if symbol in ["ETH", "BTC"]:
-                price = self.market.get_crypto_price(symbol.lower())
-            elif symbol == "AAPL":
-                price = self.market.get_stock_price(symbol)
+            if a.kind == AssetKind.CRYPTO:
+
+               price = self.market.get_crypto_price(symbol.lower())
+
+            elif a.kind == AssetKind.STOCK:
+
+               price = self.market.get_stock_price(symbol)
+
             else:
-                price = 1.0
+
+               price = 1.0
+        
             total += float(a.balance) * float(price)
         return total
 
