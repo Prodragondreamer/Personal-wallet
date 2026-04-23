@@ -34,7 +34,7 @@ class StubBackend:
         return list(self._assets)
 
     def get_portfolio_total_usd(self) -> float:
-    total = 0.0
+        total = 0.0
 
     for a in self._assets:
         symbol = a.symbol.upper()
