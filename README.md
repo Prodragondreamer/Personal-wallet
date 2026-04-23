@@ -4,6 +4,18 @@ A personal crypto wallet mobile app built with Python and Kivy, featuring real-t
 
 **Team:** Joseph Majcherek · DJ Martinez · Adriel Moronta · Doyle Bradford · Chandler Isma
 
+# Demo video
+## Click thumbnail to view
+
+<p align="center">
+  <a href="https://youtube.com/shorts/4DIzhcNY81Q">
+    <img src="https://img.youtube.com/vi/4DIzhcNY81Q/hqdefault.jpg" width="250">
+  </a>
+</p>
+
+
+
+
 ---
 
 ## Getting Started
