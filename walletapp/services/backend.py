@@ -41,9 +41,9 @@ class StubBackend:
 
             try:
                 if a.kind == AssetKind.CRYPTO:
-                   price = self.market.get_crypto_price(symbol.lower())
+                    price = self.market.get_crypto_price(symbol.lower())
                 elif a.kind == AssetKind.STOCK:
-                   price = self.market.get_stock_price(symbol)
+                    price = self.market.get_stock_price(symbol)
                 else:
                      price = 1.0
         except Exception:
