@@ -56,11 +56,11 @@ class StubBackend:
         est_fee = 1.25
         total = float(draft.amount) + est_fee
 
-    return TransactionPreview(
-        draft=draft,
-        network="Testnet",
-        est_fee=est_fee,
-        total=total
+        return TransactionPreview(
+            draft=draft,
+            network="Testnet",
+            est_fee=est_fee,
+            total=total
     )
 
     def send_transaction(self, preview: TransactionPreview) -> SendResult:
