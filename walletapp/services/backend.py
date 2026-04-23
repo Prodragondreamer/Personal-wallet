@@ -53,8 +53,8 @@ class StubBackend:
 
     return total
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
-    est_fee = 1.25
-    total = float(draft.amount) + est_fee
+        est_fee = 1.25
+        total = float(draft.amount) + est_fee
 
     return TransactionPreview(
         draft=draft,
