@@ -33,7 +33,7 @@ class StubBackend:
     def list_assets(self) -> list[Asset]:
         return list(self._assets)
 
-    def get_portfolio_total_usd(self) -> float:
+ def get_portfolio_total_usd(self) -> float:
     total = 0.0
 
     for a in self._assets:
@@ -52,7 +52,6 @@ class StubBackend:
         total += float(a.balance) * float(price)
 
     return total
-
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
         price = self.market.get_crypto_price(draft.symbol.lower())
         est_fee = 1.25
