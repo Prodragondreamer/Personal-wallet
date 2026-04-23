@@ -24,9 +24,9 @@ class BackendController(Protocol):
 class StubBackend:
     def __init__(self) -> None:
         self._assets: list[Asset] = [
-            Asset(kind=AssetKind.CRYPTO, symbol="ETH",  balance=1.234),
+            Asset(kind=AssetKind.CRYPTO, symbol="ETH", balance=1.234),
             Asset(kind=AssetKind.CRYPTO, symbol="USDC", balance=250.00),
-            Asset(kind=AssetKind.STOCK,  symbol="AAPL", balance=3.0),
+            Asset(kind=AssetKind.STOCK, symbol="AAPL", balance=3.0),
         ]
         self.market = MarketService()
 
@@ -36,44 +36,49 @@ class StubBackend:
     def get_portfolio_total_usd(self) -> float:
         total = 0.0
 
-    for a in self._assets:
-        symbol = a.symbol.upper()
+        for a in self._assets:
+            symbol = a.symbol.upper()
 
-        try:
-            if a.kind == AssetKind.CRYPTO:
-                price = self.market.get_crypto_price(symbol.lower())
-            elif a.kind == AssetKind.STOCK:
-                price = self.market.get_stock_price(symbol)
-            else:
-                price = 1.0
-        except Exception:
-            price = 0.0
+            try:
+                if a.kind == AssetKind.CRYPTO:
+                    price = self.market.get_crypto_price(symbol.lower())
+                elif a.kind == AssetKind.STOCK:
+                    price = self.market.get_stock_price(symbol)
+                else:
+                    price = 1.0
+            except Exception:
+                price = 0.0
 
-          total += float(a.balance) * float(price)
+            total += float(a.balance) * float(price)
 
         return total
+
     def preview_transaction(self, draft: TransactionDraft) -> TransactionPreview:
         est_fee = 1.25
         total = float(draft.amount) + est_fee
 
-    return TransactionPreview(
-        draft=draft,
-        network="Testnet",
-        est_fee=est_fee,
-        total=total
-    )
+        return TransactionPreview(
+            draft=draft,
+            network="Testnet",
+            est_fee=est_fee,
+            total=total
+        )
 
     def send_transaction(self, preview: TransactionPreview) -> SendResult:
-        d     = preview.draft
+        d = preview.draft
         debit = float(d.amount)
 
         for i, a in enumerate(self._assets):
             if a.symbol.upper() != d.symbol.upper():
                 continue
+
             if float(a.balance) < debit:
                 return SendResult(ok=False, error="Insufficient balance for amount.")
+
             self._assets[i] = Asset(
-                kind=a.kind, symbol=a.symbol, balance=float(a.balance) - debit
+                kind=a.kind,
+                symbol=a.symbol,
+                balance=float(a.balance) - debit
             )
             return SendResult(ok=True, tx_hash="0xDEMO_TX_HASH")
 
