@@ -98,21 +98,37 @@ class SettingsSecurityScreen(WalletScreen):
         self.status_text = "Vault locked. Passphrase cleared from memory."
         self.vault_hint = "Vault is locked."
         self._refresh_main()
+
+# TRY ADDING THIS INSTEAD OF WHAT YOU HAVE FOR THE RESET VAULT FUNCTION, NOTE: ONCE YOU COPY PASTE THIS JUST REMOVE THE HASHTAGS ON THE CODE
+#def reset_vault(self):
+    #app = App.get_running_app()
+
+    #try:
+        #app.backend.reset_vault(confirm=True)
+        #self.status_text = "Vault reset successfully."
+
+        ## Update UI state
+        #self.vault_hint = "No vault yet. Create a new one."
+        #self._refresh_main()
+
+    #except VaultError as e:
+        #self.status_text = str(e) 
+    
     def reset_vault(self):
         app = App.get_running_app()
     
         try:
            
-            app.backend.reset_vault(confirm=True, confirm_text="RESET")
+            app.backend.reset_vault(confirm=True, confirm_text="RESET") #REMOVE CONFIRM_TEXT="RESET"
     
             print("Vault reset successful")
     
             #
-            app.backend.initialize_vault("newpass123")
+            app.backend.initialize_vault("newpass123") #REMOVE THIS
     
         except VaultError as e:
             print("Reset failed:", e)
-        def save_settings(self) -> None:
+        def save_settings(self) -> None: #FIX THE INDENTATION HERE SO IT ALIGNS WITH RESET VAULT AND OTHER CODE DEFINTIONS
             app = self.manager.app  # type: ignore[attr-defined]
             b = app.backend
             if isinstance(b, SecureWalletBackend):
