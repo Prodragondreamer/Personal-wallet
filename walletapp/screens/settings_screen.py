@@ -98,24 +98,37 @@ class SettingsSecurityScreen(WalletScreen):
         self.status_text = "Vault locked. Passphrase cleared from memory."
         self.vault_hint = "Vault is locked."
         self._refresh_main()
-
-    def save_settings(self) -> None:
-        app = self.manager.app  # type: ignore[attr-defined]
-        b = app.backend
-        if isinstance(b, SecureWalletBackend):
-            if not b.is_unlocked:
-                self.status_text = "Unlock the vault before saving settings."
-                return
-            try:
-                b.save_security_settings(
-                    self.killswitch_enabled,
-                    require_pin=False,
-                    biometrics=False,
-                )
-            except VaultError as e:
-                self.status_text = str(e)
-                return
-        self.status_text = "Settings saved."
+    def reset_vault(self):
+        app = App.get_running_app()
+    
+        try:
+           
+            app.backend.reset_vault(confirm=True, confirm_text="RESET")
+    
+            print("Vault reset successful")
+    
+            #
+            app.backend.initialize_vault("newpass123")
+    
+        except VaultError as e:
+            print("Reset failed:", e)
+        def save_settings(self) -> None:
+            app = self.manager.app  # type: ignore[attr-defined]
+            b = app.backend
+            if isinstance(b, SecureWalletBackend):
+                if not b.is_unlocked:
+                    self.status_text = "Unlock the vault before saving settings."
+                    return
+                try:
+                    b.save_security_settings(
+                        self.killswitch_enabled,
+                        require_pin=False,
+                        biometrics=False,
+                    )
+                except VaultError as e:
+                    self.status_text = str(e)
+                    return
+            self.status_text = "Settings saved."
 
     def _refresh_main(self) -> None:
         try:
