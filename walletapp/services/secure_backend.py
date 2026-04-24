@@ -209,6 +209,34 @@ class SecureWalletBackend(BackendController):
             return SendResult(ok=True, tx_hash="0xSEPOLIA_TESTNET_DEMO_TX")
         return SendResult(ok=False, error=f"Unknown asset symbol: {d.symbol}")
 
+    def reset_vault(self, confirm: bool = False) -> None:
+    """
+    Permanently deletes the vault and all encrypted data.
+    Used when user forgets passphrase.
+    """
+    if not confirm:
+        raise VaultError("Vault reset requires confirmation.")
+
+    # Clear in-memory crypto + repos
+    self._clear_unlock()
+
+    # Close DB connection
+    try:
+        self._db.close()
+    except Exception:
+        pass
+
+    # Delete DB file
+    import os
+    if os.path.exists(self._db.path):
+        os.remove(self._db.path)
+
+    # Recreate fresh database
+    self._db = Database(self._db.path)
+    self._db.init_schema()
+
+    # Vault is now completely wiped and uninitialized
+
     # ---- Transaction history helpers (UI can call via hasattr) ----
     def log_transaction_preview(self, preview: TransactionPreview) -> int:
         return self._tx.log_preview(preview)
