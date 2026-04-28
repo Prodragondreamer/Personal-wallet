@@ -101,36 +101,26 @@ class SettingsSecurityScreen(WalletScreen):
 
     def reset_vault(self):
         app = App.get_running_app()
-
+         b = app.backend
         try:
+            if hasattr(b, "reset_vault"):
+                b.reset_vault()
+                self.status_text = "Vault reset successfully."
+            else:
+                self.status_text = "Reset not supported by backend."
+
+            self.vault_hint = "No vault yet. Create a new one."
+            self._refresh_main()
+        except VaultError as e:
+            print("Reset failed:", e)
              
-             app.backend.reset_vault(confirm=True)
 
         
      
 
-        except VaultError as e:
-            print("Reset failed:", e)
+        
 
     
-"""
-    def reset_vault(self) -> None:
-        app = App.get_running_app()
-
-        try:
-            app.backend.reset_vault(confirm=True)
-            self.status_text = "Vault reset successfully."
-
-            # Update UI
-            self.vault_hint = "No vault yet. Create a new one."
-            self._refresh_main()
-
-        except VaultError as e:
-            self.status_text = str(e)
-        except AttributeError:
-            self.status_text = "Backend is not initialized."
-            """
-
     def save_settings(self) -> None:
         app = self.manager.app  # type: ignore[attr-defined]
         b = app.backend
