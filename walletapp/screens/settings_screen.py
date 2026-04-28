@@ -99,43 +99,43 @@ class SettingsSecurityScreen(WalletScreen):
         self.vault_hint = "Vault is locked."
         self._refresh_main()
 
-def reset_vault(self):
-        app = App.get_running_app()
+    def reset_vault(self):
+            app = App.get_running_app()
+        
+            try:
+               
+                app.backend.reset_vault(confirm=True)
+                self.status_text = "Vault reset successfully."
     
-        try:
-           
-            app.backend.reset_vault(confirm=True)
-            self.status_text = "Vault reset successfully."
-
-            # Update UI state
-            self.vault_hint = "No vault yet. Create a new one."
-            self._refresh_main()
+                # Update UI state
+                self.vault_hint = "No vault yet. Create a new one."
+                self._refresh_main()
+        
+            except VaultError as e:
+             self.status_text = str(e)
+            except AttributeError:
+                  self.status_text = "Backend is not initialized."
+            def save_settings(self) -> None:
+                app = self.manager.app  # type: ignore[attr-defined]
+                b = app.backend
+                if isinstance(b, SecureWalletBackend):
+                    if not b.is_unlocked:
+                        self.status_text = "Unlock the vault before saving settings."
+                        return
+                    try:
+                        b.save_security_settings(
+                            self.killswitch_enabled,
+                            require_pin=False,
+                            biometrics=False,
+                        )
+                    except VaultError as e:
+                        self.status_text = str(e)
+                        return
+                self.status_text = "Settings saved."
     
-        except VaultError as e:
-         self.status_text = str(e)
-        except AttributeError:
-              self.status_text = "Backend is not initialized."
-        def save_settings(self) -> None:
-            app = self.manager.app  # type: ignore[attr-defined]
-            b = app.backend
-            if isinstance(b, SecureWalletBackend):
-                if not b.is_unlocked:
-                    self.status_text = "Unlock the vault before saving settings."
-                    return
-                try:
-                    b.save_security_settings(
-                        self.killswitch_enabled,
-                        require_pin=False,
-                        biometrics=False,
-                    )
-                except VaultError as e:
-                    self.status_text = str(e)
-                    return
-            self.status_text = "Settings saved."
-
-     def _refresh_main(self) -> None:
-        try:
-            main = self.manager.get_screen("main")  # type: ignore[attr-defined]
-            main.on_pre_enter()
-        except Exception:
-            pass
+           def _refresh_main(self) -> None:
+               try:
+                   main = self.manager.get_screen("main")  # type: ignore[attr-defined]
+                   main.on_pre_enter()
+             except Exception:
+                  pass
