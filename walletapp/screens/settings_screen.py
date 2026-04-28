@@ -99,7 +99,7 @@ class SettingsSecurityScreen(WalletScreen):
         self.vault_hint = "Vault is locked."
         self._refresh_main()
 
-        def reset_vault(self) -> None:
+    def reset_vault(self) -> None:
             app = App.get_running_app()
 
         try:
