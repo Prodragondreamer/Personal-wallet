@@ -99,6 +99,22 @@ class SettingsSecurityScreen(WalletScreen):
         self.vault_hint = "Vault is locked."
         self._refresh_main()
 
+    def reset_vault(self):
+        app = App.get_running_app()
+
+        try:
+             # You can replace "RESET" with user input later
+             app.backend.reset_vault(confirm=True)
+
+        print("Vault reset successful")
+
+     
+
+        except VaultError as e:
+            print("Reset failed:", e)
+
+    
+"""
     def reset_vault(self) -> None:
             app = App.get_running_app()
 
@@ -114,6 +130,7 @@ class SettingsSecurityScreen(WalletScreen):
             self.status_text = str(e)
         except AttributeError:
             self.status_text = "Backend is not initialized."
+            """
 
     def save_settings(self) -> None:
         app = self.manager.app  # type: ignore[attr-defined]
@@ -135,6 +152,7 @@ class SettingsSecurityScreen(WalletScreen):
                 return
 
         self.status_text = "Settings saved."
+        
 
     def _refresh_main(self) -> None:
         try:
