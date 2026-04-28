@@ -99,21 +99,26 @@ class SettingsSecurityScreen(WalletScreen):
         self.vault_hint = "Vault is locked."
         self._refresh_main()
 
-    def reset_vault(self):
+    def reset_vault(self) -> None:
         app = App.get_running_app()
-         b = app.backend
+        b = app.backend
+    
         try:
             if hasattr(b, "reset_vault"):
                 b.reset_vault()
                 self.status_text = "Vault reset successfully."
             else:
                 self.status_text = "Reset not supported by backend."
-
+    
             self.vault_hint = "No vault yet. Create a new one."
             self._refresh_main()
+    
         except VaultError as e:
-            print("Reset failed:", e)
-             
+            self.status_text = str(e)
+    
+        except Exception as e:
+            self.status_text = f"Reset failed: {e}"
+                 
 
         
      
