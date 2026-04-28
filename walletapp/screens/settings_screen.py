@@ -106,8 +106,7 @@ class SettingsSecurityScreen(WalletScreen):
              
              app.backend.reset_vault(confirm=True)
 
-        print("Vault reset successful")
-
+        
      
 
         except VaultError as e:
