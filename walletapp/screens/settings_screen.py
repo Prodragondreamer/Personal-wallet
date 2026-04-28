@@ -134,6 +134,7 @@ def reset_vault(self):
             self.status_text = "Settings saved."
 
     def _refresh_main(self) -> None:
+        pass
         try:
             main = self.manager.get_screen("main")  # type: ignore[attr-defined]
             main.on_pre_enter()
