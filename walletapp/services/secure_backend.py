@@ -214,8 +214,6 @@ class SecureWalletBackend(BackendController):
         Permanently deletes the vault and all encrypted data.
         Used when user forgets passphrase.
         """
-        if not confirm:
-            raise VaultError("Vault reset requires confirmation.")
     
         # Clear in-memory crypto + repos
         self._clear_unlock()
