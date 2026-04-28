@@ -103,7 +103,7 @@ class SettingsSecurityScreen(WalletScreen):
         app = App.get_running_app()
 
         try:
-             # You can replace "RESET" with user input later
+             
              app.backend.reset_vault(confirm=True)
 
         print("Vault reset successful")
