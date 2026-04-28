@@ -85,7 +85,7 @@ class SettingsSecurityScreen(WalletScreen):
         self._clear_passphrase_field()
         self.status_text = "Unlocked."
         prefs = b.load_security_settings()
-        self.killswitch_enabled = prefs["killswitch_enabled"]
+        self.killswitch_enabled = prefs.get("killswitch_enabled", False)
         self.vault_hint = "Vault unlocked."
         self._refresh_main()
 
